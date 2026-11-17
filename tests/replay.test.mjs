@@ -59,11 +59,12 @@ test('long gaps and adversarial same-time ticks are processed with bounded per-f
 test('Space released and pressed again between two ticks replays the intentional jump',async()=>{
  const game=await fresh(),rec=new ReplayRecorder(engine,1,0);rec.start(0);
  applyReplayMask(game,16);game.tick();rec.push(16,1,game.replay_hash());
- game.key(57,0);game.key(57,1);game.tick();rec.push(16|64,56,game.replay_hash());
- applyReplayMask(game,16);game.tick();rec.push(16,111,game.replay_hash());
+ let wall=1;while(game.get_phase()===5){applyReplayMask(game,16);game.tick();wall+=55;rec.push(16,wall,game.replay_hash());}
+ game.key(57,0);game.key(57,1);game.tick();wall+=55;rec.push(16|64,wall,game.replay_hash());
+ applyReplayMask(game,16);game.tick();wall+=55;rec.push(16,wall,game.replay_hash());
  assert.equal(game.debug_state(0x563),166);
- const original=game.replay_hash(),movie=new ReplayPlayback(rec.snapshot(111),engine),replayed=await fresh();
- movie.advance(111,mask=>{applyReplayMask(replayed,mask);replayed.tick();return replayed.replay_hash();});
+ const original=game.replay_hash(),movie=new ReplayPlayback(rec.snapshot(wall),engine),replayed=await fresh();
+ while(!movie.done)movie.advance(wall,mask=>{applyReplayMask(replayed,mask);replayed.tick();return replayed.replay_hash();});
  assert(movie.done);assert.equal(replayed.replay_hash(),original);assert.equal(replayed.debug_state(0x563),166);
 });
 

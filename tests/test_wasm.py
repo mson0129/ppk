@@ -34,6 +34,13 @@ class PortTests(unittest.TestCase):
             self.call('tick')
             self.assertEqual(self.call('get_error'), 0)
 
+    def finish_fade(self):
+        for _ in range(40):
+            if self.call('get_phase') != 5:
+                return
+            self.ticks(1)
+        self.fail('fade did not finish')
+
     def test_standalone_module_and_initial_stage(self):
         self.assertEqual(len(self.module.imports), 0)
         self.assertEqual((self.state(0x561), self.state(0x563)), (248, 168))
@@ -50,6 +57,7 @@ class PortTests(unittest.TestCase):
         self.assertEqual(self.state(0x13fa), 10)
         self.call('key', 57, 1)
         self.ticks(1)
+        self.finish_fade()
         self.assertEqual(self.call('get_phase'), 0)
         self.assertEqual((self.state(0x561), self.state(0x563)), (248, 168))
         self.assertNotEqual(title, self.memory.read(self.store, fb, fb + 256000))
@@ -58,6 +66,7 @@ class PortTests(unittest.TestCase):
         self.call('show_intro')
         self.call('key', 57, 1)
         self.ticks(1)
+        self.finish_fade()
         self.assertEqual(self.call('get_phase'), 0)
         for _ in range(10):
             self.call('key', 57, 1)  # repeated sync while keyboard/touch/gamepad held
@@ -73,6 +82,7 @@ class PortTests(unittest.TestCase):
         self.call('key', 57, 1)
         self.call('key', 75, 1)
         self.ticks(1)
+        self.finish_fade()
         for _ in range(5):
             self.call('key', 57, 1)
             self.call('key', 75, 1)
@@ -121,6 +131,7 @@ class PortTests(unittest.TestCase):
         self.ticks(1)
         self.assertEqual(self.call('get_phase'), 1)
         self.ticks(13)
+        self.finish_fade()
         self.assertEqual(self.call('get_phase'), 0)
         self.assertEqual(self.state(0x1398), 4)
         self.assertEqual((self.state(0x561), self.state(0x563)), (248,168))
@@ -139,10 +150,12 @@ class PortTests(unittest.TestCase):
         self.put(0x58b, 0)
         self.ticks(1)
         self.assertEqual(self.state(0x13fa), 0)
+        self.finish_fade()
         self.assertEqual(self.call('get_phase'), 4)
         self.ticks(1)  # release gate prevents a held jump from skipping the clear screen
         self.call('key', 57, 1)
         self.ticks(1)
+        self.finish_fade()
         self.assertEqual(self.call('get_phase'), 0)
         self.assertEqual(self.call('get_stage'), 2)
         self.assertEqual(self.state(0x13fa), 8)
@@ -176,10 +189,12 @@ class PortTests(unittest.TestCase):
             self.put(0x1398, 3)
             self.put(0x13fa, 0)  # clear fixture; gameplay collection is tested separately
             self.ticks(1)
+            self.finish_fade()
             self.assertEqual(self.call('get_phase'), 4)
             self.ticks(1)
             self.call('key', 57, 1)
             self.ticks(1)
+            self.finish_fade()
             self.assertEqual(self.call('get_phase'), 0)
             self.assertEqual(self.call('get_stage'), stage % 50 + 1)
             self.assertEqual(self.state(0xcb6), 1234)
@@ -191,6 +206,7 @@ class PortTests(unittest.TestCase):
         self.call('key', 57, 1)
         self.ticks(1)
         self.assertEqual(self.call('get_stage'), 27)
+        self.finish_fade()
         self.put(0x583, 1)
         self.ticks(14)
         self.assertEqual(self.call('get_stage'), 27)
@@ -206,6 +222,7 @@ class PortTests(unittest.TestCase):
         self.ticks(1)
         self.call('key', 28, 1)
         self.ticks(1)
+        self.finish_fade()
         self.assertEqual(self.call('get_phase'), 0)
         self.assertEqual(self.call('get_stage'), 50)
         self.assertEqual(self.state(0xcb6), 1234)
@@ -230,6 +247,8 @@ class PortTests(unittest.TestCase):
         self.ticks(1)
         self.assertEqual(self.state(0x13fa), 0)
         self.assertEqual(self.call('run_finished'), 1)
+        self.assertEqual(self.call('get_phase'), 5)
+        self.finish_fade()
         self.ticks(1)
         self.call('key', 57, 1)
         self.ticks(1)

@@ -156,7 +156,7 @@ and its endpoint matches the original compositor output.
 
 These tests establish exact equality for the exercised gameplay paths, not a
 proof for every possible input or original hardware's analog sound/timing.
-Death-sound timing and fade/menu transitions are not cycle-exact. Stage-clear
+Death-sound timing and general menu transitions are not cycle-exact. Palette fades now reproduce the original DAC steps and retrace counts. Stage-clear
 transitions are tested with completion fixtures; full human playthroughs of
 every stage have not been recorded.
 
@@ -321,3 +321,29 @@ is retained, and gameplay continues. A replay-dialog note reports this case.
 Tick recording is also guarded. The WASM binary and replay format are unchanged.
 Regression tests reproduce a 5000ms RAF timestamp followed by a 5004ms tick,
 verify a consistent fresh snapshot, and inject snapshot/storage failures.
+
+## Palette fade timing
+
+`0327:02e6` writes 64 decremented RGB DAC palettes, waiting for one retrace
+(`02fe:000b`, VGA port 03DA bit 3) each time. `0327:01d1` writes initial black
+at one retrace, then 64 incremented palettes. Every component is clamped to
+0..63; a CSS opacity fade would produce different intermediate colors.
+The native transition uses the mode-0D VGA clock 25.175 MHz / (800×449),
+about 70.0863 retraces/s, independently of the 18.2065 Hz gameplay clock.
+Fade-out is 64 retraces (913.16 ms), fade-in 65 (927.43 ms). Render interpolation
+samples this rational clock without advancing gameplay or changing replay state.
+At a clear, the last gameplay image fades out before the bonus screen; the next
+stage fades in. Last-candy RTA completion is latched before either effect.
+
+The supplied executable's title exit calls the immediate-black palette writer
+`0327:019b` before the stage fade-in; it does not call the gradual fade-out there.
+Per the requested title fade-out/fade-in effect, the port reuses the same original
+64-retrace fade-out ladder on the title, followed by the original 65-retrace
+fade-in. Thus the title's requested gradual outgoing effect is an intentional
+change from this binary, rather than a claim that its title call sequence matches.
+
+`tests/test_fade_original.py` executes the two original routines in Unicorn and
+compares every pixel at 130 retrace positions against WASM, as well as confirming
+64/65 original retrace waits and frozen actor positions. The module still ships
+without any CPU emulator. A browser running below 70 Hz may skip visual samples;
+the elapsed time and selected palette step do not slow down with display FPS.

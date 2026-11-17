@@ -22,12 +22,26 @@ static uint32_t error_code;
 static uint32_t audio_event_id;
 static uint32_t finished_run;
 static int intro_x, intro_previous_x, intro_direction;
-enum { PLAYING, DYING, CONTINUE_SCREEN, INTRO, STAGE_CLEAR };
+enum { PLAYING, DYING, CONTINUE_SCREEN, INTRO, STAGE_CLEAR, FADING };
 #define STAGE_COUNT (sizeof asset_stage_ppk / 330)
 static int phase, wait_ticks, native_ticks, muted, advance_ready, title_space_release;
 static int tone_hz, tone_ticks, song_index, song_count;
 static uint8_t song[128];
 static uint32_t colors[16];
+/* Mode 0Dh VGA: 25.175 MHz / (800 * 449). Original 02fe:000b
+ * waits for one retrace. 0327:02e6 decrements 64 times; 01d1 first
+ * writes black at one retrace, then increments on 64 retraces. */
+#define VIDEO_DEN (1193182ull * 800 * 449)
+#define VIDEO_TICK (65536ull * 25175000)
+enum { FADE_NONE, FADE_TITLE, FADE_CLEAR, FADE_STAGE_IN };
+static int fade_kind;
+static uint64_t fade_clock;
+static uint8_t fade_screen[WIDTH*HEIGHT];
+static uint32_t fade_colors[16];
+static void present_transition(int fraction);
+static void show_stage_bonus(void);
+static void begin_fade(int kind){fade_kind=kind;fade_clock=0;phase=FADING;}
+
 static int previous_x[64], previous_y[64], previous_count;
 static void capture_positions(void);
 
@@ -110,7 +124,7 @@ API void init(void){
  memcpy(mem+DATA+0x15f0,asset_stage_pp4,sizeof asset_stage_pp4);
  memcpy(mem+0xb020,asset_stage_ppk,sizeof asset_stage_ppk);
  ax=bx=cx=dx=si=di=bp=0;ds=0xf0a;ss=0x4000;es=0;cs=0x327;sp=0xfffe;
- cf=zf=sf=of=0;error_code=0;phase=0;advance_ready=0;title_space_release=0;wait_ticks=0;native_ticks=0;audio_event_id=0;finished_run=0;tone_hz=0;tone_ticks=0;song_count=0;song_index=0;pit_low=0;pit_enabled=0;
+ cf=zf=sf=of=0;error_code=0;phase=0;fade_kind=FADE_NONE;fade_clock=0;advance_ready=0;title_space_release=0;wait_ticks=0;native_ticks=0;audio_event_id=0;finished_run=0;tone_hz=0;tone_ticks=0;song_count=0;song_index=0;pit_low=0;pit_enabled=0;
  set(0x13f4,1);set(0x159c,BG>>4);set(0x1398,5);set(0x159a,5);set(0x158c,10000);set(0x1212,1);set(0xcb6,0);set(0xcb8,0);set(0x561,248);set(0x563,168);load_stage();
 }
 /* Original 0327:2477 screen loader: 128-byte header, PCX-style RLE,
@@ -147,10 +161,43 @@ API void key(int scan,int down){
  if(scan>=0&&scan<128)wr8(DATA+0x10ae + scan,down?1:0);
 }
 API void release_keys(void){memset(mem+DATA+0x10ae,0,128);}
+static int fade_frames(int fraction){
+ if(fraction<0)fraction=0;if(fraction>1000)fraction=1000;
+ return (int)((fade_clock+VIDEO_TICK*(unsigned)fraction/1000)/VIDEO_DEN);
+}
+static void present_transition(int fraction){
+ int f=fade_frames(fraction);if(fade_kind==FADE_CLEAR&&f>=64){present();return;}int out=fade_kind==FADE_CLEAR||(fade_kind==FADE_TITLE&&f<=64);
+ int amount=out?f:fade_kind==FADE_TITLE?f-65:f-1;
+ if(amount<0)amount=0;if(amount>64)amount=64;
+ const uint32_t*source=out?fade_colors:colors;uint32_t palette[16];
+ for(int i=0;i<16;i++){uint32_t color=0xff000000u;
+  for(int channel=0;channel<3;channel++){int v=(((source[i]>>(channel*8))&255)*63+127)/255;
+   v=out?(v>amount?v-amount:0):(v<amount?v:amount);
+   color|=(uint32_t)(v*255/63)<<(channel*8);
+  }palette[i]=color;
+ }
+ const uint8_t*pixels=out?fade_screen:screen;
+ for(int i=0;i<WIDTH*HEIGHT;i++)rgba[i]=palette[pixels[i]&15];
+}
+API uint32_t transition_frame(int fraction){return fade_kind?fade_frames(fraction):0;}
+API uint32_t transition_kind(void){return fade_kind;}
+static void show_stage_bonus(void){
+ phase=STAGE_CLEAR;advance_ready=0;invoke(game_0d1e);draw_text(80,100,5,DATA+0x849);
+ char bonus[16];decimal(bonus,(135-state(0x1396))*20,0,' ');
+ memcpy(mem+DATA+0xc44,bonus,strlen(bonus)+1);draw_text(192,100,2,DATA+0xc44);copy_background(BG>>4);present();
+}
 API void tick(void){
  if(error_code)return; capture_positions(); native_ticks++;
  if(song_index<song_count){int note=song[song_index++];set(0x1598,song_index);int divisor=state(0x3c6 + note*2);tone_hz=divisor?1193182/divisor:0;set(0x158a,1);}else{tone_hz=0;set(0x158a,0);}
- if(phase==INTRO){if(rd8(DATA+0x10e7)){int stage=state(0x13f4);start_stage(stage);title_space_release=1;return;}intro_previous_x=intro_x;intro_x+=intro_direction;if(intro_x>=213||intro_x<=184)intro_direction=-intro_direction;copy_background(BG>>4);draw_sprite(intro_x,119,0x7920+0x1800,16,1);draw_sprite(intro_x+30,113,0x7920+0x1800,16,1);present();return;}
+ if(phase==FADING){
+  fade_clock+=VIDEO_TICK;int frames=fade_frames(0),total=fade_kind==FADE_TITLE?129:fade_kind==FADE_STAGE_IN?65:64;
+  if(frames>=total){int kind=fade_kind;fade_kind=FADE_NONE;fade_clock=0;
+   if(kind==FADE_CLEAR){phase=STAGE_CLEAR;advance_ready=0;present();}else{phase=PLAYING;release_keys();capture_positions();present();}
+  }else present_transition(0);
+  return;
+ }
+ if(phase==INTRO){if(rd8(DATA+0x10e7)){int stage=state(0x13f4);memcpy(fade_screen,screen,sizeof screen);memcpy(fade_colors,colors,sizeof colors);
+ start_stage(stage);title_space_release=1;begin_fade(FADE_TITLE);present_transition(0);return;}intro_previous_x=intro_x;intro_x+=intro_direction;if(intro_x>=213||intro_x<=184)intro_direction=-intro_direction;copy_background(BG>>4);draw_sprite(intro_x,119,0x7920+0x1800,16,1);draw_sprite(intro_x+30,113,0x7920+0x1800,16,1);present();return;}
  if(phase==STAGE_CLEAR||phase==CONTINUE_SCREEN){
   int pressed=rd8(DATA+0x10e7)||rd8(DATA+0x10ca);
   if(!pressed)advance_ready=1;
@@ -158,7 +205,7 @@ API void tick(void){
    if(phase==STAGE_CLEAR){set(0x13f4,state(0x13f4)%STAGE_COUNT+1);}
    else if(state(0x159a)>0){set(0x159a,state(0x159a)-1);set(0x1398,5);}
    else {init();show_intro();return;}
-   set(0x561,248);set(0x563,168);release_keys();load_stage();phase=PLAYING;advance_ready=0;
+   set(0x561,248);set(0x563,168);release_keys();load_stage();begin_fade(FADE_STAGE_IN);advance_ready=0;present_transition(0);
   }
   return;
  }
@@ -169,7 +216,10 @@ API void tick(void){
  invoke(game_09e9);
  if(state(0x583)){tone_hz=1193182/(state(0x139a)?state(0x139a):1);set(0x139a,state(0x139a)+10);}
  if(state(0x585)){phase=1;wait_ticks=12;audio_event_id++;}
- if(state(0x13fa)==0&&phase==PLAYING){phase=STAGE_CLEAR;advance_ready=0;invoke(game_1db1);invoke(game_0d1e);draw_text(80,100,5,DATA+0x849);char bonus[16];decimal(bonus,(135-state(0x1396))*20,0,' ');memcpy(mem+DATA+0xc44,bonus,strlen(bonus)+1);draw_text(192,100,2,DATA+0xc44);copy_background(BG>>4);}
+ if(state(0x13fa)==0&&phase==PLAYING){invoke(game_1db1);advance_ready=0;
+  memcpy(fade_screen,screen,sizeof screen);memcpy(fade_colors,colors,sizeof colors);show_stage_bonus();begin_fade(FADE_CLEAR);
+  present_transition(0);return;
+ }
  present();
 }
 /* Rendering interpolates positions only. All collision/game state stays on the
@@ -185,6 +235,7 @@ static int actors(Actor*out){int n=0;
 }
 static void capture_positions(void){Actor a[64];previous_count=actors(a);for(int i=0;i<previous_count;i++){previous_x[i]=a[i].x;previous_y[i]=a[i].y;}}
 API void render_interpolated(int fraction){
+ if(phase==FADING){present_transition(fraction);return;}
  if(phase==3){int x=intro_previous_x+(intro_x-intro_previous_x)*fraction/1000;copy_background(BG>>4);draw_sprite(x,119,0x7920+0x1800,16,1);draw_sprite(x+30,113,0x7920+0x1800,16,1);present();return;}
  if(phase!=0){present();return;}
  if(fraction<0)fraction=0;if(fraction>1000)fraction=1000;
@@ -210,7 +261,7 @@ API uint32_t frame_count(void){return native_ticks;}
 API uint32_t replay_hash(void){
  uint32_t hash=2166136261u;
  for(size_t i=0;i<sizeof mem;i++)hash=(hash^mem[i])*16777619u;
- const uint32_t extra[]={phase,wait_ticks,native_ticks,advance_ready,title_space_release,finished_run,intro_x,intro_direction};
+ const uint32_t extra[]={phase,wait_ticks,native_ticks,advance_ready,title_space_release,finished_run,intro_x,intro_direction,fade_kind,(uint32_t)fade_clock,(uint32_t)(fade_clock>>32)};
  for(size_t i=0;i<sizeof extra/sizeof extra[0];i++)hash=(hash^extra[i])*16777619u;
  return hash;
 }

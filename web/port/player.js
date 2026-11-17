@@ -243,6 +243,8 @@ function frame(now) {
             running = false; setStatus(`실행 오류: ${game.get_error().toString(16)}`);
         } else if (game.get_phase() === 3) {
             setStatus('인트로 화면입니다. Space를 눌러 선택한 스테이지를 시작하세요.');
+        } else if (game.get_phase() === 5) {
+            setStatus('화면 전환 중…');
         } else if (game.get_phase() === 2) {
             setStatus(game.debug_state(0x159a) > 0 ? `이어하기 ${game.debug_state(0x159a)}회 · Space로 현재 스테이지 계속` : '게임 오버 · Space로 인트로 돌아가기');
         } else if (game.get_phase() === 4) {
