@@ -1,0 +1,20 @@
+{
+  "wasm_imports": [],
+  "stages_loaded_and_simulated": 50,
+  "sequential_transitions_including_wrap_tested": 50,
+  "wasm_tests_passed": 16,
+  "original_game_routine_comparisons": 32000,
+  "compared_game_data_bytes_per_routine": 6020,
+  "compared_background_bytes_per_routine": 32000,
+  "original_intro_decoded_bytes_matched": 32000,
+  "interpolation_endpoint_frames_checked": 450,
+  "browser_observed_render_fps": 60,
+  "limitations": [
+    "Death PCM rate and fades are not cycle-exact",
+    "Full human playthroughs of all stages not recorded"
+  ],
+  "speedrun_timer_tests_passed": 4,
+  "speedrun_start": "Title-screen Space input event",
+  "speedrun_finish": "Stage 50 final candy collected",
+  "speedrun_clock": "Real elapsed time including pause, death, continues and stage waits"
+}

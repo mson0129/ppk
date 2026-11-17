@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>돌아온 너구리 · WASM</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#16191f;color:#eee;font:15px/1.6 system-ui,sans-serif}main{max-width:1000px;margin:auto;padding:20px}h1{font-size:24px;margin:0 0 8px}p{margin:8px 0 16px;color:#cbd1d9}canvas{display:block;width:100%;aspect-ratio:4/3;image-rendering:pixelated;background:#000;outline:none}button,a{font:inherit}button{color:#eee;background:#2e3642;border:1px solid #596574;padding:8px 18px;border-radius:6px;cursor:pointer}button:hover{background:#424f60}button:disabled{opacity:.5;cursor:wait}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}a{color:#acd3ff}#status{min-height:1.6em}.screen{position:relative;width:min(100%,calc((100dvh - 240px)*4/3));min-width:240px;margin:auto}.overlay{position:absolute;inset:0;display:grid;place-content:center;text-align:center;background:#000b}.overlay[hidden]{display:none}.overlay button{font-size:22px} .touch{display:none;justify-content:flex-end;align-items:center;gap:24px;padding:16px 0 4px;touch-action:none;-webkit-user-select:none;user-select:none}
+.dpad{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);gap:3px;touch-action:none}
+.touch button{padding:0;touch-action:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;user-select:none;border:1px solid #6f8299;background:#293746ee;box-shadow:0 4px 0 #101820;color:#fff;font-size:23px;font-weight:700}
+.touch button.is-held{background:#76c8ff;color:#101820;box-shadow:0 1px 0 #101820;transform:translateY(3px)}
+.dpad [data-key="72"]{grid-area:1/2;border-radius:14px 14px 5px 5px}.dpad [data-key="75"]{grid-area:2/1;border-radius:14px 5px 5px 14px}.dpad [data-key="77"]{grid-area:2/3;border-radius:5px 14px 14px 5px}.dpad [data-key="80"]{grid-area:3/2;border-radius:5px 5px 14px 14px}
+.dpad-center{grid-area:2/2;display:grid;place-items:center;color:#8dacc8;background:#202d3a;border-radius:8px;font-size:24px}
+.touch .space-button{width:78px;height:78px;border-radius:50%;font-size:14px;letter-spacing:.04em;flex-shrink:0}
+.touch button:disabled{opacity:.4}
+@media(any-pointer:coarse),(max-width:700px){.touch{display:flex}.screen{min-width:0;width:min(100%,calc((100dvh - 340px)*4/3));min-width:min(100%,280px)}}
+.screen:fullscreen .touch{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));padding:0;gap:20px;opacity:.85}
+@media(max-height:500px) and (any-pointer:coarse){main{padding:8px}h1,.instructions{display:none}.screen{width:min(100%,calc((100dvh - 100px)*4/3))}.touch{position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));z-index:2;padding:0;opacity:.85}.toolbar{margin:8px 0}.toolbar button{padding:6px 12px}}
+.screen:fullscreen{display:flex;align-items:center;justify-content:center;background:#000}.screen:fullscreen canvas{width:auto;height:100%;max-width:100%;object-fit:contain}@media(max-width:700px){main{padding:12px 0}h1{font-size:21px}main>h1,main>p,.toolbar{margin-left:12px;margin-right:12px}.screen{width:100%;min-width:0}.touch{justify-content:space-between;padding:16px max(12px,env(safe-area-inset-right)) 4px max(8px,env(safe-area-inset-left))}.screen:fullscreen .touch{left:max(8px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));padding:0}}
+
+.toolbar{display:flex;justify-content:flex-end;gap:6px;margin:0;padding:6px 8px;background:#20262f}
+.toolbar button{display:grid;place-items:center;width:38px;height:38px;padding:8px;border-radius:8px;background:#2e3947}
+.toolbar svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.screen .overlay{top:50px}
+.screen:fullscreen .toolbar{position:absolute;top:env(safe-area-inset-top,0px);right:env(safe-area-inset-right,0px);z-index:3;background:#20262fcc;border-radius:0 0 0 10px}
+@media(max-width:700px){.screen .toolbar{margin:0}}
+@media(max-height:500px) and (any-pointer:coarse){.screen .toolbar{position:absolute;right:0;top:0;z-index:3;background:#20262fcc}.touch{left:max(8px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));justify-content:space-between}}
+
+h1 .dos-link{display:inline-block;font-size:12px;font-weight:400;vertical-align:middle;text-decoration:none}
+h1 .dos-link:hover{text-decoration:underline}
+.toolbar{align-items:center;justify-content:flex-end;gap:5px}
+.toolbar #status{flex:1;min-width:0;margin:0 auto 0 0;color:#cbd1d9;font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+.toolbar button{flex:0 0 36px;width:36px;height:36px;padding:7px}
+.screen .overlay{top:48px}
+.screen:fullscreen .toolbar{left:0;right:0;border-radius:0;min-height:48px}
+@media(max-width:700px){h1 .dos-link{font-size:11px}.toolbar{min-height:58px;padding:5px 6px}.toolbar #status{font-size:11px}.toolbar button{flex-basis:32px;width:32px;height:32px;padding:6px}.screen .overlay{top:58px}}
+@media(max-height:500px) and (any-pointer:coarse){.screen .toolbar{left:0;right:0}.toolbar #status{font-size:11px}}
+
+/* Fixed controls stay above the game in portrait, landscape and fullscreen. */
+.screen .touch,.screen:fullscreen .touch{position:fixed;left:max(8px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));top:auto;bottom:max(16px,env(safe-area-inset-bottom));z-index:10;display:none;grid-template-columns:1fr auto;grid-template-rows:16px auto;align-items:center;justify-content:space-between;gap:8px 24px;padding:0;opacity:.9;pointer-events:none}
+.touch .dpad{grid-column:1;grid-row:2;justify-self:start;pointer-events:auto}
+.touch .space-button{grid-column:2;grid-row:2;pointer-events:auto}
+.touch .controller-handle{grid-column:1/-1;grid-row:1;justify-self:center;width:88px;height:16px;border-radius:99px;background:#263544dc;border:0;box-shadow:none;cursor:ns-resize;pointer-events:auto;touch-action:none}
+
+.touch.is-dragging{opacity:1}.touch.is-dragging .controller-handle{background:#507a9d}
+@media(any-pointer:coarse),(max-width:700px){.screen .touch,.screen:fullscreen .touch{display:grid}}
+
+.play-options{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:960px;margin:10px auto;color:#cbd1d9;font-size:13px}
+.play-options label{display:flex;align-items:center;gap:8px}
+#stage-select{padding:5px 8px;border:1px solid #596574;border-radius:6px;background:#20262f;color:#fff;font:inherit}
+#play-timer{margin-left:6px;color:#fff;font:14px ui-monospace,monospace;font-variant-numeric:tabular-nums}
+@media(max-width:700px){.play-options{padding:0 12px;font-size:12px;gap:8px}#play-timer{font-size:13px}}
+#fullscreen-play-timer{display:none;font:12px ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#fff}.screen:fullscreen #fullscreen-play-timer{display:block;white-space:nowrap;margin-right:6px}
+</style>
+</head>
+<body><main>
+<h1>돌아온 너구리 · WASM <a class="dos-link" href="./dos.htm">(원본 DOS 버전 보기)</a></h1>
+<p class="instructions">전체 50개 스테이지 · 방향키로 이동 / 사다리 타기 · Space로 점프 · P로 일시정지<br>게임패드: 방향키·왼쪽 스틱 이동 / A·B 시작·점프 / Start 일시정지 <span id="gamepad-status" hidden>· 게임패드 연결됨</span></p>
+<div class="play-options">
+<label for="stage-select">스테이지 <select id="stage-select" disabled aria-label="시작 스테이지 선택"></select></label>
+<span class="timer-label"><span id="timer-mode">타임어택</span> <output id="play-timer" role="timer" aria-live="off">00:00.000</output></span>
+</div>
+<div class="screen" id="screen"><div class="toolbar" role="group" aria-label="게임 메뉴"><span id="status" role="status">게임을 불러오는 중…</span><output id="fullscreen-play-timer" aria-label="타임어택 기록" role="timer" aria-live="off">00:00.000</output><button type="button" id="pause" aria-label="일시정지" title="일시정지" disabled><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5v14M16 5v14"/></svg></button><button type="button" id="restart" aria-label="처음부터" title="처음부터" disabled><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg></button><button type="button" id="sound" aria-label="소리 끄기" title="소리 끄기" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5ZM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg></button><button type="button" id="fullscreen" aria-label="전체 화면" title="전체 화면" ><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></svg></button></div><canvas id="game" width="320" height="200" tabindex="0" aria-label="돌아온 너구리 게임 화면"></canvas><div class="overlay" id="overlay"><button id="start" disabled>불러오는 중…</button></div><div class="touch" role="group" aria-label="터치 게임 컨트롤">
+<button type="button" class="controller-handle" role="slider" aria-label="컨트롤러 상하 위치" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" title="위아래로 드래그하여 컨트롤러 이동"></button>
+<div class="dpad" role="group" aria-label="이동 십자키">
+<button type="button" data-key="72" aria-label="위로 이동" aria-pressed="false" disabled>↑</button>
+<button type="button" data-key="75" aria-label="왼쪽으로 이동" aria-pressed="false" disabled>←</button>
+<span class="dpad-center" aria-hidden="true">✚</span>
+<button type="button" data-key="77" aria-label="오른쪽으로 이동" aria-pressed="false" disabled>→</button>
+<button type="button" data-key="80" aria-label="아래로 이동" aria-pressed="false" disabled>↓</button>
+</div>
+<button type="button" class="space-button" data-key="57" aria-label="Space: 시작 및 점프" aria-pressed="false" disabled>SPACE</button>
+</div></div>
+
+
+
+
+</main><script type="module" src="./port/player.js"></script></body>
+</html>

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.dylib
+
+/dist/
+.venv/
+.DS_Store
