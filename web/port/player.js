@@ -1,5 +1,6 @@
 import { SpeedrunTimer } from './speedrun-timer.mjs';
 import { GamepadInput } from './gamepad-input.mjs';
+import { REPLAY_SCANS, MAX_FILE_BYTES, ReplayRecorder, ReplayPlayback, ReplayStore, validateReplay, applyReplayMask } from './replay.mjs';
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
 const status = document.getElementById('status');
@@ -20,6 +21,18 @@ const helpTitle = document.getElementById('controls-help-title');
 const helpBody = document.getElementById('controls-help-body');
 const helpClose = document.getElementById('controls-help-close');
 let connectedGamepad = false;
+const replayButton = document.getElementById('replay');
+const replayDialog = document.getElementById('replay-dialog');
+const replaySummary = document.getElementById('replay-summary');
+const replayNote = document.getElementById('replay-note');
+const replayWatch = document.getElementById('replay-watch');
+const replayDownload = document.getElementById('replay-download');
+const replayFile = document.getElementById('replay-file');
+const replayControls = document.getElementById('replay-controls');
+const replayRate = document.getElementById('replay-rate');
+const replayStore = new ReplayStore();
+let recorder = null, playback = null, lastReplay = null, engineId = '', inputMask = 0, spaceReleasedSinceTick = false;
+let replayMenuResume = false, savedAt = 0, replayStorageFailed = false;
 const inputIcons = {
     keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M5 9h1m3 0h1m3 0h1m3 0h1M5 12h1m3 0h1m3 0h1m3 0h1M7 16h10"/>',
     gamepad: '<path d="M7 7h10c3 0 5 10 3 12-1 1-3-1-5-3H9c-2 2-4 4-5 3-2-2 0-12 3-12Z"/><path d="M8 9v6M5 12h6M16 11h.01M19 14h.01"/>'
@@ -45,8 +58,9 @@ helpDialog.addEventListener('close', () => { releaseInputs(); (running && !pause
 
 function acceptStart(scan) {
     if (scan === 57 && running && !paused && game.get_phase() === 3) {
-        speedrun.start(performance.now());
-        updateTimer(performance.now(), true);
+        const now = performance.now();
+        speedrun.start(now); recorder?.start(now);
+        updateTimer(now, true);
     }
 }
 const keyMap = { ArrowLeft: 75, ArrowRight: 77, ArrowUp: 72, ArrowDown: 80, Space: 57, Enter: 28 };
@@ -58,18 +72,22 @@ const gamepadInput = new GamepadInput();
 let gamepadKeys = new Set();
 let gamepadNeedsNeutral = false;
 function syncKeys() {
-    if (!game) return;
+    if (!game || playback) return;
+    const previousMask = inputMask; inputMask = 0;
     for (const scan of new Set(Object.values(keyMap))) {
         const held = running && !paused && (pendingKeys.has(scan) || gamepadKeys.has(scan) || keyboardKeys.has(scan) || [...pointerKeys.values()].includes(scan));
+        if (held) inputMask |= 1 << REPLAY_SCANS.indexOf(scan);
         game.key(scan, held ? 1 : 0);
         for (const button of touchButtons) if (Number(button.dataset.key) === scan) {
             button.classList.toggle('is-held', held);
             if (button.getAttribute('aria-pressed') !== String(held)) button.setAttribute('aria-pressed', String(held));
         }
     }
+    if ((previousMask & 16) && !(inputMask & 16)) spaceReleasedSinceTick = true;
 }
 function releaseInputs() {
-    keyboardKeys.clear(); pointerKeys.clear(); pendingKeys.clear(); gamepadKeys.clear(); gamepadNeedsNeutral = true;
+    if (inputMask & 16) spaceReleasedSinceTick = true;
+    keyboardKeys.clear(); pointerKeys.clear(); pendingKeys.clear(); gamepadKeys.clear(); gamepadNeedsNeutral = true; inputMask = 0;
     if (game) game.release_keys();
     syncKeys();
 }
@@ -107,7 +125,7 @@ function updateSound() {
         }
     }
     if (!audio) return;
-    const hz = running && !paused && !helpDialog.open && sound ? game.audio_frequency() : 0;
+    const hz = running && !paused && !helpDialog.open && !replayDialog.open && sound ? game.audio_frequency() : 0;
     if (hz === lastHz) return;
     lastHz = hz;
     oscillator.frequency.setValueAtTime(Math.max(1, Math.min(hz, 18000)), audio.currentTime);
@@ -129,7 +147,7 @@ function setIcon(button, name, label) {
 }
 function updateTimer(now = performance.now(), force = false) {
     if (!force && now - timerUpdatedAt < 100) return;
-    const ms = Math.floor(speedrun.elapsed(now));
+    const ms = Math.floor(playback ? playback.elapsed() : speedrun.elapsed(now));
     const text = `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`;
     if (playTimer.textContent !== text) playTimer.textContent = text;
     if (fullscreenTimer.textContent !== text) fullscreenTimer.textContent = text;
@@ -138,13 +156,18 @@ function updateTimer(now = performance.now(), force = false) {
 function setPaused(value) {
     paused = value; releaseInputs(); accumulator = 0; last = performance.now();
     setIcon(pauseButton, paused ? 'play' : 'pause', paused ? '계속하기' : '일시정지');
-    setStatus(paused ? '일시정지됨' : '방향키로 이동하고 Space로 점프하세요.');
+    setStatus(playback ? (paused ? '리플레이 일시정지' : '리플레이 재생 중') : paused ? '일시정지됨' : '방향키로 이동하고 Space로 점프하세요.');
+    if (!playback) archiveReplay();
     updateSound(); updateTimer(performance.now(), true); if (!paused) canvas.focus({preventScroll:true});
 }
 function begin() {
+    if (!playback) archiveReplay();
+    playback = null; document.body.classList.remove('is-replay'); requestAnimationFrame(fitController); replayControls.hidden = true; stageSelect.disabled = false;
     releaseInputs(); gamepadNeedsNeutral = true;
     game.start_stage(Number(stageSelect.value) || 1);
     game.show_intro();
+    spaceReleasedSinceTick = false;
+    recorder = new ReplayRecorder(engineId, Number(stageSelect.value) || 1, performance.now()); savedAt = performance.now();
     speedrun.reset(Number(stageSelect.value) || 1); timerMode.textContent = speedrun.startStage === 1 ? '타임어택' : '연습 시간'; updateTimer(performance.now(), true); lastAudioEvent = 0; deathSource?.stop(); deathSource = null; running = true; paused = false; accumulator = 0; last = performance.now();
     touchButtons.forEach(button => { button.disabled = false; });
     overlay.hidden = true; pauseButton.disabled = restartButton.disabled = false;
@@ -158,7 +181,7 @@ function pollGamepads() {
     const enabled = !document.hidden && document.hasFocus();
     const input = gamepadInput.update(pads, enabled);
     updateInputHelp(input.connected > 0);
-    if (helpDialog.open) { releaseInputs(); return; }
+    if (helpDialog.open || replayDialog.open) { releaseInputs(); return; }
     if (!enabled) { gamepadNeedsNeutral = true; gamepadKeys.clear(); syncKeys(); return; }
     if (gamepadNeedsNeutral) {
         gamepadKeys.clear();
@@ -170,6 +193,7 @@ function pollGamepads() {
         if (input.pressed.has(57) && !start.disabled) begin();
         return;
     }
+    if (playback) { if (input.pausePressed && !playback.done) setPaused(!paused); return; }
     if (input.pausePressed) { setPaused(!paused); gamepadNeedsNeutral = true; return; }
     gamepadKeys = paused ? new Set() : input.keys;
     if (!paused) for (const scan of input.pressed) { acceptStart(scan); pendingKeys.add(scan); }
@@ -178,14 +202,32 @@ function pollGamepads() {
 window.addEventListener('gamepaddisconnected', () => { gamepadKeys.clear(); syncKeys(); });
 function frame(now) {
     pollGamepads();
-    if (running && !paused && !helpDialog.open) {
+    if (running && !paused && !helpDialog.open && !replayDialog.open && playback) {
+        try {
+            playback.advance(Math.min(now-last,1000), mask => {
+                applyReplayMask(game,mask); game.tick();
+                if (game.get_error()) throw new Error('리플레이 실행 오류가 발생했습니다.');
+                return game.replay_hash();
+            });
+            draw(Math.round(playback.fraction(stepMs))); updateSound();
+            setStatus(playback.done ? '리플레이 재생 완료' : `리플레이 재생 중 · ${replayRate.value}배속`);
+            if (playback.done) { paused = true; pauseButton.disabled = true; updateSound(); }
+            if (stageSelect.value !== String(game.get_stage())) stageSelect.value = String(game.get_stage());
+        } catch (error) { paused = true; pauseButton.disabled = true; setStatus(error.message); updateSound(); }
+    } else if (running && !paused && !helpDialog.open && !replayDialog.open && !playback) {
         const beforePhase = game.get_phase();
         accumulator += Math.min(now - last, 1000);
         while (accumulator >= stepMs) {
             const tickStart = performance.now(), tickPhase = game.get_phase();
-            syncKeys(); game.tick();
-            if (game.run_finished()) speedrun.finish(performance.now());
+            syncKeys(); const tickMask = inputMask | (spaceReleasedSinceTick ? 64 : 0); spaceReleasedSinceTick = false; game.tick();
+            const tickNow = performance.now();
+            if (game.run_finished()) { speedrun.finish(tickNow); recorder?.finish(tickNow); }
+            if (recorder) {
+                const accepted = recorder.push(tickMask, tickNow, game.replay_hash());
+                if (!accepted || game.run_finished()) { archiveReplay(tickNow); recorder = null; }
+            }
             if (tickPhase === 2 && game.get_phase() === 3) {
+                archiveReplay(tickNow); recorder = new ReplayRecorder(engineId, 1, tickNow);
                 speedrun.reset(1); timerMode.textContent = '타임어택';
                 releaseInputs(); // A held continue key must not skip the new title/start boundary.
             }
@@ -208,6 +250,7 @@ function frame(now) {
         if (stageSelect.value !== String(game.get_stage())) stageSelect.value = String(game.get_stage());
         if (beforePhase !== game.get_phase()) updateTimer(performance.now(), true);
         draw(Math.round(accumulator / stepMs * 1000)); updateSound();
+        if (now - savedAt >= 5000) { archiveReplay(now); savedAt = now; }
     }
     updateTimer(performance.now());
     maxFrameMs = Math.max(maxFrameMs, now - last); renderCount++;
@@ -227,8 +270,9 @@ document.getElementById('fullscreen').addEventListener('click', async () => {
     catch { setStatus('이 브라우저에서는 전체 화면을 열 수 없습니다.'); }
 });
 window.addEventListener('keydown', event => {
-    if (helpDialog.open || !running || event.target.closest?.('button,select,input,a')) return;
-    if (event.code === 'KeyP' && !event.repeat) { event.preventDefault(); setPaused(!paused); return; }
+    if (helpDialog.open || replayDialog.open || !running || event.target.closest?.('button,select,input,a')) return;
+    if (event.code === 'KeyP' && !event.repeat && !playback?.done) { event.preventDefault(); setPaused(!paused); return; }
+    if (playback) return;
     if (keyMap[event.code] !== undefined) { event.preventDefault(); if (!paused) { acceptStart(keyMap[event.code]); keyboardKeys.add(keyMap[event.code]); if (!event.repeat) pendingKeys.add(keyMap[event.code]); syncKeys(); } }
 });
 window.addEventListener('keyup', event => {
@@ -309,7 +353,7 @@ for (const button of touchButtons) {
     button.addEventListener('contextmenu', event => event.preventDefault());
     button.addEventListener('pointerdown', event => {
         event.preventDefault();
-        if (!running || paused || (event.pointerType === 'mouse' && event.button !== 0)) return;
+        if (!running || paused || playback || (event.pointerType === 'mouse' && event.button !== 0)) return;
         button.setPointerCapture(event.pointerId);
         pointerKeys.set(event.pointerId, Number(button.dataset.key));
         acceptStart(Number(button.dataset.key));
@@ -327,10 +371,84 @@ for (const button of touchButtons) {
 window.addEventListener('pointerup', releasePointer);
 window.addEventListener('pointercancel', releasePointer);
 
+function movieTime(ms) {
+    const s = Math.floor(ms / 1000);
+    return `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}.${String(Math.floor(ms % 1000)).padStart(3,'0')}`;
+}
+function refreshReplaySummary() {
+    replayWatch.disabled = !lastReplay || lastReplay.engine !== engineId;
+    replayDownload.disabled = !lastReplay;
+    replaySummary.textContent = lastReplay
+        ? `${new Date(lastReplay.createdAt).toLocaleString()} · ${lastReplay.stage} 스테이지 시작 · ${movieTime(lastReplay.timer.elapsed)}${lastReplay.completed ? ' · 완주' : ' · 중간 기록'}`
+        : '아직 저장된 플레이가 없습니다. 타이틀에서 Space를 눌러 플레이하면 자동 기록됩니다.';
+    replayNote.textContent = replayStorageFailed ? '자동 저장 공간을 사용할 수 없습니다. 파일로 저장해 보관하세요.'
+        : lastReplay && lastReplay.engine !== engineId ? '다른 게임 버전의 기록입니다. 파일 저장은 가능하지만 이 버전에서는 재생할 수 없습니다.' : '';
+}
+function storeReplay(data) {
+    if (!data) return;
+    lastReplay = data; refreshReplaySummary();
+    replayStore.save(data).catch(() => { replayStorageFailed = true; if(replayDialog.open) refreshReplaySummary(); });
+}
+function archiveReplay(now = performance.now()) {
+    const data = recorder?.snapshot(now, Math.floor(speedrun.elapsed(now)));
+    if (data) storeReplay(data);
+    return data;
+}
+replayButton.addEventListener('click', () => {
+    if (!playback) archiveReplay();
+    replayMenuResume = running && !paused;
+    if (replayMenuResume) setPaused(true);
+    releaseInputs(); refreshReplaySummary(); replayDialog.showModal(); updateSound();
+});
+document.getElementById('replay-close').addEventListener('click', () => replayDialog.close());
+replayDialog.addEventListener('close', () => {
+    if (replayMenuResume) setPaused(false);
+    replayMenuResume = false;
+});
+replayWatch.addEventListener('click', () => {
+    if (!lastReplay) return;
+    try {
+        const movie = new ReplayPlayback(lastReplay, engineId);
+        // The current recording was archived when opening this dialog.
+        recorder = null; replayMenuResume = false; releaseInputs();
+        playback = movie; document.body.classList.add('is-replay'); game.start_stage(movie.data.stage); game.show_intro();
+        stageSelect.value = String(movie.data.stage); stageSelect.disabled = true;
+        running = true; paused = false; accumulator = 0; last = performance.now();
+        lastAudioEvent = 0; deathSource?.stop(); deathSource = null;
+        replayRate.value = '1'; replayControls.hidden = false;
+        overlay.hidden = true; pauseButton.disabled = restartButton.disabled = false;
+        setIcon(pauseButton,'pause','일시정지');
+        timerMode.textContent = '리플레이'; replayDialog.close();
+        setStatus('리플레이 재생 중 · 1배속'); enableAudio(); draw(); updateTimer(last,true);
+        touchButtons.forEach(button => { button.disabled = true; });
+        canvas.focus({preventScroll:true});
+    } catch(error) { replayNote.textContent = error.message; }
+});
+replayRate.addEventListener('change', () => { if(playback) playback.rate = Number(replayRate.value); });
+document.getElementById('replay-exit').addEventListener('click', begin);
+replayDownload.addEventListener('click', () => {
+    if (!lastReplay) return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(lastReplay)], {type:'application/json'}));
+    const link = document.createElement('a'); link.href = url; link.download = `ppk-stage${lastReplay.stage}-${Date.now()}.ppk-replay.json`;
+    link.click(); setTimeout(() => URL.revokeObjectURL(url), 30000);
+});
+document.getElementById('replay-import').addEventListener('click', () => replayFile.click());
+replayFile.addEventListener('change', async () => {
+    const file = replayFile.files[0]; if(!file)return;
+    try {
+        if(file.size > MAX_FILE_BYTES) throw new Error('리플레이 파일이 너무 큽니다. (최대 12MB)');
+        const data = validateReplay(JSON.parse(await file.text()), engineId);
+        storeReplay(data); replayNote.textContent = '파일을 불러왔습니다. 재생을 눌러 확인하세요.';
+    } catch(error) { replayNote.textContent = error instanceof SyntaxError ? 'JSON 형식의 리플레이 파일을 선택하세요.' : error.message; }
+    replayFile.value = '';
+});
+window.addEventListener('pagehide', () => { if(!playback)archiveReplay(); });
+
 try {
     const response = await fetch(new URL('./ppk.wasm', import.meta.url));
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const bytes = await response.arrayBuffer();
+    engineId = [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(b=>b.toString(16).padStart(2,'0')).join('');
     const result = await WebAssembly.instantiate(bytes, {});
     game = result.instance.exports;
     for (let stage = 1; stage <= game.stage_count(); stage++) {
@@ -339,7 +457,9 @@ try {
     stageSelect.disabled = false;
     pixels = new ImageData(new Uint8ClampedArray(game.memory.buffer, game.framebuffer(), 320 * 200 * 4), 320, 200);
     game.init(); game.show_intro(); draw(); start.disabled = false; start.textContent = '게임 시작';
-    setStatus('게임 시작을 누르세요.'); requestAnimationFrame(frame);
+    setStatus('게임 시작을 누르세요.'); replayButton.disabled = false;
+    replayStore.load().then(data => { if(data && !lastReplay){lastReplay = validateReplay(data);refreshReplaySummary();} }).catch(() => {replayStorageFailed=true;});
+    requestAnimationFrame(frame);
 } catch (error) {
     setStatus(`게임을 불러오지 못했습니다: ${error.message}`);
     start.textContent = '불러오기 실패'; console.error(error);

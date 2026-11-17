@@ -30,6 +30,7 @@ check('offline navigation, query URLs and WASM return cached original bytes with
  assert.deepEqual(new Uint8Array(await (await h.get('port/ppk.wasm',{mode:'cors'})).arrayBuffer()),new Uint8Array(files.get('port/ppk.wasm')));
  assert.equal(await (await h.get('./')).text(),files.get('index.htm').toString());
  assert.equal(await (await h.get('index.html')).text(),files.get('index.htm').toString());
+ assert.equal(await (await h.get('port/replay.mjs',{mode:'cors'})).text(),files.get('port/replay.mjs').toString());
  assert.deepEqual(new Uint8Array(await (await h.get('icons/apple-touch-icon.png?v=2',{mode:'cors'})).arrayBuffer()),new Uint8Array(files.get('icons/apple-touch-icon.png')));assert.equal(h.state.network,count);
 });
 check('other pages and non-GET requests are not intercepted',async()=>{

@@ -24,7 +24,7 @@ static uint32_t finished_run;
 static int intro_x, intro_previous_x, intro_direction;
 enum { PLAYING, DYING, CONTINUE_SCREEN, INTRO, STAGE_CLEAR };
 #define STAGE_COUNT (sizeof asset_stage_ppk / 330)
-static int phase, wait_ticks, native_ticks, muted, advance_ready;
+static int phase, wait_ticks, native_ticks, muted, advance_ready, title_space_release;
 static int tone_hz, tone_ticks, song_index, song_count;
 static uint8_t song[128];
 static uint32_t colors[16];
@@ -110,7 +110,7 @@ API void init(void){
  memcpy(mem+DATA+0x15f0,asset_stage_pp4,sizeof asset_stage_pp4);
  memcpy(mem+0xb020,asset_stage_ppk,sizeof asset_stage_ppk);
  ax=bx=cx=dx=si=di=bp=0;ds=0xf0a;ss=0x4000;es=0;cs=0x327;sp=0xfffe;
- cf=zf=sf=of=0;error_code=0;phase=0;advance_ready=0;wait_ticks=0;native_ticks=0;audio_event_id=0;finished_run=0;tone_hz=0;tone_ticks=0;song_count=0;song_index=0;pit_low=0;pit_enabled=0;
+ cf=zf=sf=of=0;error_code=0;phase=0;advance_ready=0;title_space_release=0;wait_ticks=0;native_ticks=0;audio_event_id=0;finished_run=0;tone_hz=0;tone_ticks=0;song_count=0;song_index=0;pit_low=0;pit_enabled=0;
  set(0x13f4,1);set(0x159c,BG>>4);set(0x1398,5);set(0x159a,5);set(0x158c,10000);set(0x1212,1);set(0xcb6,0);set(0xcb8,0);set(0x561,248);set(0x563,168);load_stage();
 }
 /* Original 0327:2477 screen loader: 128-byte header, PCX-style RLE,
@@ -141,12 +141,16 @@ static void show_continue(void){
 }
 API uint32_t get_stage(void){return state(0x13f4);}
 API uint32_t stage_count(void){return STAGE_COUNT;}
-API void key(int scan,int down){if(scan>=0&&scan<128)wr8(DATA+0x10ae + scan,down?1:0);}
+API void key(int scan,int down){
+ /* Consume the title's Space until every input source releases it. */
+ if(scan==57&&title_space_release){if(!down)title_space_release=0;down=0;}
+ if(scan>=0&&scan<128)wr8(DATA+0x10ae + scan,down?1:0);
+}
 API void release_keys(void){memset(mem+DATA+0x10ae,0,128);}
 API void tick(void){
  if(error_code)return; capture_positions(); native_ticks++;
  if(song_index<song_count){int note=song[song_index++];set(0x1598,song_index);int divisor=state(0x3c6 + note*2);tone_hz=divisor?1193182/divisor:0;set(0x158a,1);}else{tone_hz=0;set(0x158a,0);}
- if(phase==INTRO){if(rd8(DATA+0x10e7)){int stage=state(0x13f4);start_stage(stage);return;}intro_previous_x=intro_x;intro_x+=intro_direction;if(intro_x>=213||intro_x<=184)intro_direction=-intro_direction;copy_background(BG>>4);draw_sprite(intro_x,119,0x7920+0x1800,16,1);draw_sprite(intro_x+30,113,0x7920+0x1800,16,1);present();return;}
+ if(phase==INTRO){if(rd8(DATA+0x10e7)){int stage=state(0x13f4);start_stage(stage);title_space_release=1;return;}intro_previous_x=intro_x;intro_x+=intro_direction;if(intro_x>=213||intro_x<=184)intro_direction=-intro_direction;copy_background(BG>>4);draw_sprite(intro_x,119,0x7920+0x1800,16,1);draw_sprite(intro_x+30,113,0x7920+0x1800,16,1);present();return;}
  if(phase==STAGE_CLEAR||phase==CONTINUE_SCREEN){
   int pressed=rd8(DATA+0x10e7)||rd8(DATA+0x10ca);
   if(!pressed)advance_ready=1;
@@ -202,6 +206,14 @@ API uint32_t get_phase(void){return phase;}
 API uint32_t get_error(void){return error_code;}
 API uint32_t data_pointer(void){return (uint32_t)(uintptr_t)mem;}
 API uint32_t frame_count(void){return native_ticks;}
+/* Tick-boundary digest excludes presentation buffers: rendering is read-only. */
+API uint32_t replay_hash(void){
+ uint32_t hash=2166136261u;
+ for(size_t i=0;i<sizeof mem;i++)hash=(hash^mem[i])*16777619u;
+ const uint32_t extra[]={phase,wait_ticks,native_ticks,advance_ready,title_space_release,finished_run,intro_x,intro_direction};
+ for(size_t i=0;i<sizeof extra/sizeof extra[0];i++)hash=(hash^extra[i])*16777619u;
+ return hash;
+}
 #ifdef NATIVE_TEST
 int main(void){init();for(int i=0;i<600;i++){if(i==1)key(75,1);if(i==100)key(75,0);tick();if(error_code){printf("ERROR %x tick %d\n",error_code,i);return 1;}}printf("x=%d y=%d fruits=%d score=%d sp=%x phase=%d\n",state(0x561),state(0x563),state(0x13fa),state(0xcb6),sp,phase);FILE*f=fopen("/private/tmp/ppk-native.rgba","wb");fwrite(rgba,sizeof rgba,1,f);fclose(f);return 0;}
 #endif

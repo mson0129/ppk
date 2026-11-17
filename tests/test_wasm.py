@@ -54,6 +54,32 @@ class PortTests(unittest.TestCase):
         self.assertEqual((self.state(0x561), self.state(0x563)), (248, 168))
         self.assertNotEqual(title, self.memory.read(self.store, fb, fb + 256000))
 
+    def test_title_space_is_consumed_until_release(self):
+        self.call('show_intro')
+        self.call('key', 57, 1)
+        self.ticks(1)
+        self.assertEqual(self.call('get_phase'), 0)
+        for _ in range(10):
+            self.call('key', 57, 1)  # repeated sync while keyboard/touch/gamepad held
+            self.ticks(1)
+            self.assertEqual(self.state(0x563), 168)
+        self.call('key', 57, 0)
+        self.call('key', 57, 1)
+        self.ticks(2)
+        self.assertEqual(self.state(0x563), 166)
+
+    def test_title_start_allows_direction_without_forced_jump(self):
+        self.call('show_intro')
+        self.call('key', 57, 1)
+        self.call('key', 75, 1)
+        self.ticks(1)
+        for _ in range(5):
+            self.call('key', 57, 1)
+            self.call('key', 75, 1)
+            self.ticks(1)
+        self.assertLess(self.state(0x561), 248)
+        self.assertEqual(self.state(0x563), 168)
+
     def test_left_movement_and_wall(self):
         self.call('key', 75, 1)
         self.ticks(10)

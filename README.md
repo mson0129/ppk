@@ -130,7 +130,7 @@ python3 -m venv /tmp/ppk-tools
 /tmp/ppk-tools/bin/python -m unittest discover -s tests -v
 ```
 
-Sixteen WASM tests cover all 50 map loads, fruit counts, scenery selection,
+Eighteen WASM tests cover all 50 map loads, fruit counts, scenery selection,
 all sequential clear transitions (including 50 → 1), selected-stage intro and
 respawn, same-stage credit continue, invalid selections, the standalone module,
 stage-50 final-candy completion latch, initial map, movement/wall,
@@ -213,7 +213,7 @@ development. On iPhone/iPad use Safari's Share → Add to Home Screen; on Androi
 use the browser's Install app / Add to Home Screen menu. Chromium's native
 install prompt is also exposed through an install button when available.
 
-Open the installed app online once and wait for **오프라인 준비됨**. Its 12
+Open the installed app online once and wait for **오프라인 준비됨**. Its 13
 pre-cached files include the HTML, manifest, all JS modules, icons and the
 compiled WASM (all 50 stages are embedded). It can then relaunch and play
 without a network connection. The separate DOS reference remains online-only
@@ -259,3 +259,49 @@ manifest/name/icon metadata, and directory navigation canonicalizes to
 Apple touch icon and favicon use a cache-refresh query parameter. Existing
 incorrectly created iOS shortcuts should be removed and added again after
 updating to this release; a page cannot rewrite an already-created OS shortcut.
+
+## Replays and title start input
+
+The toolbar's replay icon opens the most recent attempt. Recording begins with
+the intro and becomes saveable on the title Space input. One attempt is saved
+locally in IndexedDB every five seconds, on pause, on restart, on page hide and
+at the stage-50 finish. The recording is an input movie, not video. File export
+and import are local browser operations; no replay is uploaded to a server.
+
+Playback offers pause, 1x/2x/4x speed and exit to a new title screen. Physical
+gameplay input is disabled and floating touch controls are hidden during playback. Viewing a replay ends the current
+attempt after archiving it. Start stages other than 1 remain practice runs.
+Playback displays recorded RTA, including original pauses and between-stage
+waits. Pausing the viewer stops its timeline; it does not alter the stored RTA.
+
+Format v1 records the WASM SHA-256, start stage, key-mask changes, tick wall
+timestamps, timer start/finish and state digests at 180-tick intervals plus the
+last tick. Bit 6 preserves a Space release/re-press occurring between fixed
+ticks. This matters because the title-start release latch responds to key-up.
+Playback rejects another engine version and stops if a checkpoint differs.
+The digest excludes presentation buffers; rendering/audio reads cannot alter
+logical movie state. Imported JSON is validated as data, with bounded file
+size, frame count, timestamps, masks, checkpoints and per-render catch-up work.
+
+Limits: the latest attempt only, 200,000 simulation ticks (about three hours),
+12 MB per imported file and at most 24 hours of recorded wall time including
+pauses. Storage failures leave an in-memory movie available for file export.
+Browser eviction/private browsing can remove local replays; export a file to
+retain an important run. A five-second save interval can lose the last few
+seconds on abrupt browser termination.
+
+Title Space still starts RTA at the actual input event. WASM now consumes this
+Space until release, so holding keyboard Space, touch SPACE or gamepad A/B
+across the title boundary does not jump on stage entry. Movement is available
+immediately and a new Space press jumps normally.
+
+Validation: two new WASM regression tests check held-title Space and movement;
+eight replay tests reproduce tick states, pauses, stage-27 practice, 2x/4x
+speed, exact final millisecond time, sub-tick Space edges, invalid imports,
+state mismatches and recording limits. Browser QA verifies file export/import,
+IndexedDB restoration, 4x completion, frozen viewer time on pause and mobile
+offline playback using the verified service-worker package.
+
+```sh
+node --test tests/*.test.mjs
+```
