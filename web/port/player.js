@@ -14,6 +14,35 @@ const fullscreenTimer = document.getElementById('fullscreen-play-timer');
 const speedrun = new SpeedrunTimer();
 const timerMode = document.getElementById('timer-mode');
 let timerUpdatedAt = 0;
+const inputHelp = document.getElementById('input-help');
+const helpDialog = document.getElementById('controls-help');
+const helpTitle = document.getElementById('controls-help-title');
+const helpBody = document.getElementById('controls-help-body');
+const helpClose = document.getElementById('controls-help-close');
+let connectedGamepad = false;
+const inputIcons = {
+    keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M5 9h1m3 0h1m3 0h1m3 0h1M5 12h1m3 0h1m3 0h1m3 0h1M7 16h10"/>',
+    gamepad: '<path d="M7 7h10c3 0 5 10 3 12-1 1-3-1-5-3H9c-2 2-4 4-5 3-2-2 0-12 3-12Z"/><path d="M8 9v6M5 12h6M16 11h.01M19 14h.01"/>'
+};
+function renderHelp() {
+    helpTitle.textContent = connectedGamepad ? '게임패드 조작법' : '키보드 조작법';
+    helpBody.innerHTML = connectedGamepad
+        ? '<dl><dt>방향키 · 왼쪽 스틱</dt><dd>이동 / 사다리 타기</dd><dt>A · B</dt><dd>시작 / 점프 / 이어하기</dd><dt>Start</dt><dd>일시정지 / 재개</dd></dl><p>타이틀에서 A 또는 B를 누르면 타임어택이 시작됩니다.</p>'
+        : '<dl><dt>방향키 ↑ ↓ ← →</dt><dd>이동 / 사다리 타기</dd><dt>Space</dt><dd>시작 / 점프 / 이어하기</dd><dt>P</dt><dd>일시정지 / 재개</dd></dl><p>터치 화면에서는 십자키와 SPACE 버튼으로 조작할 수 있습니다.</p>';
+    helpBody.innerHTML += '<p>홈 화면에 추가: iPhone은 Safari 공유 → 홈 화면에 추가, Android는 브라우저 메뉴 → 앱 설치를 선택하세요. 온라인에서 오프라인 저장을 완료한 뒤에는 인터넷 없이 실행할 수 있습니다.</p>';
+}
+function updateInputHelp(connected) {
+    if (connectedGamepad === connected) return;
+    connectedGamepad = connected;
+    inputHelp.querySelector('svg').innerHTML = inputIcons[connected ? 'gamepad' : 'keyboard'];
+    const label = connected ? '게임패드 연결됨 · 게임패드 조작법 보기' : '키보드 조작법 보기';
+    inputHelp.setAttribute('aria-label', label); inputHelp.title = label;
+    if (helpDialog.open) renderHelp();
+}
+inputHelp.addEventListener('click', () => { releaseInputs(); renderHelp(); helpDialog.showModal(); if (game) updateSound(); helpClose.focus(); });
+helpClose.addEventListener('click', () => helpDialog.close());
+helpDialog.addEventListener('close', () => { releaseInputs(); (running && !paused ? canvas : inputHelp).focus({preventScroll:true}); if (game) updateSound(); });
+
 function acceptStart(scan) {
     if (scan === 57 && running && !paused && game.get_phase() === 3) {
         speedrun.start(performance.now());
@@ -78,7 +107,7 @@ function updateSound() {
         }
     }
     if (!audio) return;
-    const hz = running && !paused && sound ? game.audio_frequency() : 0;
+    const hz = running && !paused && !helpDialog.open && sound ? game.audio_frequency() : 0;
     if (hz === lastHz) return;
     lastHz = hz;
     oscillator.frequency.setValueAtTime(Math.max(1, Math.min(hz, 18000)), audio.currentTime);
@@ -128,8 +157,8 @@ function pollGamepads() {
     try { pads = navigator.getGamepads?.() || []; } catch {}
     const enabled = !document.hidden && document.hasFocus();
     const input = gamepadInput.update(pads, enabled);
-    const indicator = document.getElementById('gamepad-status');
-    if (indicator) indicator.hidden = input.connected === 0;
+    updateInputHelp(input.connected > 0);
+    if (helpDialog.open) { releaseInputs(); return; }
     if (!enabled) { gamepadNeedsNeutral = true; gamepadKeys.clear(); syncKeys(); return; }
     if (gamepadNeedsNeutral) {
         gamepadKeys.clear();
@@ -149,7 +178,7 @@ function pollGamepads() {
 window.addEventListener('gamepaddisconnected', () => { gamepadKeys.clear(); syncKeys(); });
 function frame(now) {
     pollGamepads();
-    if (running && !paused) {
+    if (running && !paused && !helpDialog.open) {
         const beforePhase = game.get_phase();
         accumulator += Math.min(now - last, 1000);
         while (accumulator >= stepMs) {
@@ -198,7 +227,7 @@ document.getElementById('fullscreen').addEventListener('click', async () => {
     catch { setStatus('이 브라우저에서는 전체 화면을 열 수 없습니다.'); }
 });
 window.addEventListener('keydown', event => {
-    if (!running) return;
+    if (helpDialog.open || !running || event.target.closest?.('button,select,input,a')) return;
     if (event.code === 'KeyP' && !event.repeat) { event.preventDefault(); setPaused(!paused); return; }
     if (keyMap[event.code] !== undefined) { event.preventDefault(); if (!paused) { acceptStart(keyMap[event.code]); keyboardKeys.add(keyMap[event.code]); if (!event.repeat) pendingKeys.add(keyMap[event.code]); syncKeys(); } }
 });

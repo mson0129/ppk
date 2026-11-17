@@ -1,0 +1,32 @@
+{
+  "id": "./index.htm",
+  "name": "돌아온 너구리",
+  "short_name": "너구리",
+  "lang": "ko",
+  "start_url": "./index.htm",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#16191f",
+  "theme_color": "#16191f",
+  "description": "돌아온 너구리 WASM 게임",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

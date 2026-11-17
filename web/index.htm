@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>돌아온 너구리 · WASM</title>
+<link rel="manifest" href="./app.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
+<meta name="theme-color" content="#16191f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="돌아온 너구리">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
 :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#16191f;color:#eee;font:15px/1.6 system-ui,sans-serif}main{max-width:1000px;margin:auto;padding:20px}h1{font-size:24px;margin:0 0 8px}p{margin:8px 0 16px;color:#cbd1d9}canvas{display:block;width:100%;aspect-ratio:4/3;image-rendering:pixelated;background:#000;outline:none}button,a{font:inherit}button{color:#eee;background:#2e3642;border:1px solid #596574;padding:8px 18px;border-radius:6px;cursor:pointer}button:hover{background:#424f60}button:disabled{opacity:.5;cursor:wait}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}a{color:#acd3ff}#status{min-height:1.6em}.screen{position:relative;width:min(100%,calc((100dvh - 240px)*4/3));min-width:240px;margin:auto}.overlay{position:absolute;inset:0;display:grid;place-content:center;text-align:center;background:#000b}.overlay[hidden]{display:none}.overlay button{font-size:22px} .touch{display:none;justify-content:flex-end;align-items:center;gap:24px;padding:16px 0 4px;touch-action:none;-webkit-user-select:none;user-select:none}
 .dpad{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);gap:3px;touch-action:none}
@@ -51,14 +57,26 @@ h1 .dos-link:hover{text-decoration:underline}
 #play-timer{margin-left:6px;color:#fff;font:14px ui-monospace,monospace;font-variant-numeric:tabular-nums}
 @media(max-width:700px){.play-options{padding:0 12px;font-size:12px;gap:8px}#play-timer{font-size:13px}}
 #fullscreen-play-timer{display:none;font:12px ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#fff}.screen:fullscreen #fullscreen-play-timer{display:block;white-space:nowrap;margin-right:6px}
+
+.game-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}.game-heading h1{margin:0;min-width:0;font-size:clamp(17px,4.9vw,24px)}
+#input-help{flex:0 0 38px;width:38px;height:38px;display:grid;place-items:center;padding:7px;border-radius:9px}
+#input-help svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#controls-help{width:min(360px,calc(100vw - 32px));max-height:calc(100dvh - 40px);padding:0;border:1px solid #526274;border-radius:16px;background:#202833;color:#f3f5f8;box-shadow:0 16px 64px #0008;overscroll-behavior:contain}
+#controls-help::backdrop{background:#000a}.help-card{padding:24px}.help-card h2{font-size:21px;margin:0 0 20px}.help-card dl{display:grid;grid-template-columns:auto 1fr;gap:14px 18px;margin:0}.help-card dt{font-weight:700;color:#b4dbff}.help-card dd{margin:0}.help-card p{font-size:13px;margin:20px 0 0}.help-card footer{display:flex;justify-content:center;margin-top:28px}.help-card footer button{min-width:112px}
+@media(max-width:700px){main{padding-top:6px}.game-heading{padding:0 8px}.game-heading h1 .dos-link{font-size:10px}.play-options{margin:6px auto}.toolbar #status{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}}
+@media(max-height:500px) and (any-pointer:coarse){.game-heading{position:absolute;right:8px;top:60px;z-index:4;margin:0}.game-heading h1{display:none}}
+
+#install-app{flex:0 0 34px;width:34px;height:34px;padding:6px;border-radius:8px}#install-app[hidden],#apply-update[hidden]{display:none}#install-app svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#offline-state{font-size:10px;color:#a9bdc7;white-space:nowrap}#apply-update{font-size:11px;padding:4px 7px;white-space:nowrap}.play-options{flex-wrap:wrap;gap:6px 10px}.timer-label{margin-left:auto}
+@media(display-mode:standalone){main{padding-top:max(6px,env(safe-area-inset-top))}}
 </style>
 </head>
 <body><main>
-<h1>돌아온 너구리 · WASM <a class="dos-link" href="./dos.htm">(원본 DOS 버전 보기)</a></h1>
-<p class="instructions">전체 50개 스테이지 · 방향키로 이동 / 사다리 타기 · Space로 점프 · P로 일시정지<br>게임패드: 방향키·왼쪽 스틱 이동 / A·B 시작·점프 / Start 일시정지 <span id="gamepad-status" hidden>· 게임패드 연결됨</span></p>
+<header class="game-heading"><h1>돌아온 너구리 · WASM <a class="dos-link" href="./dos.htm">(원본 DOS 버전 보기)</a></h1><button id="install-app" type="button" hidden aria-label="홈 화면에 앱 설치" title="홈 화면에 앱 설치"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/></svg></button><button id="input-help" type="button" aria-label="키보드 조작법 보기" aria-haspopup="dialog" title="키보드 조작법 보기"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M5 9h1m3 0h1m3 0h1m3 0h1M5 12h1m3 0h1m3 0h1m3 0h1M7 16h10"/></svg></button></header>
+
 <div class="play-options">
 <label for="stage-select">스테이지 <select id="stage-select" disabled aria-label="시작 스테이지 선택"></select></label>
-<span class="timer-label"><span id="timer-mode">타임어택</span> <output id="play-timer" role="timer" aria-live="off">00:00.000</output></span>
+<span id="offline-state" role="status" hidden></span><button id="apply-update" type="button" hidden title="게임을 다시 불러와 새 버전을 적용합니다">새 버전 적용</button><span class="timer-label"><span id="timer-mode">타임어택</span> <output id="play-timer" role="timer" aria-live="off">00:00.000</output></span>
 </div>
 <div class="screen" id="screen"><div class="toolbar" role="group" aria-label="게임 메뉴"><span id="status" role="status">게임을 불러오는 중…</span><output id="fullscreen-play-timer" aria-label="타임어택 기록" role="timer" aria-live="off">00:00.000</output><button type="button" id="pause" aria-label="일시정지" title="일시정지" disabled><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5v14M16 5v14"/></svg></button><button type="button" id="restart" aria-label="처음부터" title="처음부터" disabled><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg></button><button type="button" id="sound" aria-label="소리 끄기" title="소리 끄기" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5ZM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg></button><button type="button" id="fullscreen" aria-label="전체 화면" title="전체 화면" ><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></svg></button></div><canvas id="game" width="320" height="200" tabindex="0" aria-label="돌아온 너구리 게임 화면"></canvas><div class="overlay" id="overlay"><button id="start" disabled>불러오는 중…</button></div><div class="touch" role="group" aria-label="터치 게임 컨트롤">
 <button type="button" class="controller-handle" role="slider" aria-label="컨트롤러 상하 위치" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" title="위아래로 드래그하여 컨트롤러 이동"></button>
@@ -70,10 +88,12 @@ h1 .dos-link:hover{text-decoration:underline}
 <button type="button" data-key="80" aria-label="아래로 이동" aria-pressed="false" disabled>↓</button>
 </div>
 <button type="button" class="space-button" data-key="57" aria-label="Space: 시작 및 점프" aria-pressed="false" disabled>SPACE</button>
-</div></div>
+</div>
+<dialog id="controls-help" aria-labelledby="controls-help-title"><div class="help-card"><h2 id="controls-help-title">키보드 조작법</h2><div id="controls-help-body"></div><footer><button id="controls-help-close" type="button">닫기</button></footer></div></dialog>
+</div>
 
 
 
 
-</main><script type="module" src="./port/player.js"></script></body>
+</main><script type="module" src="./port/player.js"></script><script type="module" src="./pwa.js"></script></body>
 </html>

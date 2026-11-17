@@ -10,3 +10,4 @@ python3 tools/package-web.py
   src/port.c -o dist/port/ppk.wasm
 chmod 644 dist/port/ppk.wasm
 python3 tools/build-bundle.py
+python3 tools/build-service-worker.py

@@ -199,3 +199,49 @@ available for end-to-end device testing.
 Specification: https://www.w3.org/TR/gamepad/
 
 Gamepad mapping tests: `node --test tests/gamepad-input.test.mjs` (7 cases).
+
+The top-right input icon shows a gamepad when a controller is detected, or a
+keyboard otherwise. Clicking it opens the matching control guide in a modal
+with a centered Close button. The modal suspends game inputs and simulation,
+while the real-time speedrun clock keeps counting.
+
+## Installable / offline web app
+
+The static build now includes `app.webmanifest`, Apple touch icons and
+`sw.js`. Serve it over HTTPS (GitHub Pages works); localhost is suitable for
+development. On iPhone/iPad use Safari's Share → Add to Home Screen; on Android
+use the browser's Install app / Add to Home Screen menu. Chromium's native
+install prompt is also exposed through an install button when available.
+
+Open the installed app online once and wait for **오프라인 준비됨**. Its 11
+pre-cached files include the HTML, manifest, all JS modules, icons and the
+compiled WASM (all 50 stages are embedded). It can then relaunch and play
+without a network connection. The separate DOS reference remains online-only
+because it loads js-dos from an external CDN. Clearing browser/app storage
+requires preparing the offline cache online again.
+
+`tools/build-service-worker.py` versions every cached file by its actual SHA-256
+and also includes the worker template in the version. Installation verifies
+every response before activating a complete package. Incomplete/mismatched
+updates are discarded, preserving the previous working cache. Updates wait
+while the game is open; **새 버전 적용** explicitly reloads into the new version.
+Old cache cleanup is confined to this app's service-worker scope.
+
+Both `tools/package-web.py` (when a compiled WASM exists) and `tools/publish.py`
+refresh the generated worker. `build.sh` refreshes it again after compiling
+WASM, so code/asset edits cannot silently retain an old cache version.
+To recreate the checked-in sprite-derived icons, install Pillow and run
+`python tools/build-icons.py`. Icon generation is not required for normal builds.
+
+Validation: 3 Python PWA metadata/hash tests and 7 service-worker tests cover
+offline HTML/WASM reads, failed installs, integrity mismatches, scope-limited
+cleanup, explicit activation and evicted-file repair. A real browser tab was
+reloaded with network access disabled and successfully ran the WASM game.
+Home-screen installation on physical iOS/Android hardware was not tested.
+
+```sh
+node --test tests/service-worker.test.mjs
+```
+
+Platform documentation: https://web.dev/learn/pwa/installation/ and
+https://webkit.org/blog/13878/
