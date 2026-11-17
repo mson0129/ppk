@@ -213,7 +213,7 @@ development. On iPhone/iPad use Safari's Share → Add to Home Screen; on Androi
 use the browser's Install app / Add to Home Screen menu. Chromium's native
 install prompt is also exposed through an install button when available.
 
-Open the installed app online once and wait for **오프라인 준비됨**. Its 11
+Open the installed app online once and wait for **오프라인 준비됨**. Its 12
 pre-cached files include the HTML, manifest, all JS modules, icons and the
 compiled WASM (all 50 stages are embedded). It can then relaunch and play
 without a network connection. The separate DOS reference remains online-only
@@ -233,7 +233,7 @@ WASM, so code/asset edits cannot silently retain an old cache version.
 To recreate the checked-in sprite-derived icons, install Pillow and run
 `python tools/build-icons.py`. Icon generation is not required for normal builds.
 
-Validation: 3 Python PWA metadata/hash tests and 7 service-worker tests cover
+Validation: 4 Python PWA metadata/hash tests and 7 service-worker tests cover
 offline HTML/WASM reads, failed installs, integrity mismatches, scope-limited
 cleanup, explicit activation and evicted-file repair. A real browser tab was
 reloaded with network access disabled and successfully ran the WASM game.
@@ -245,3 +245,17 @@ node --test tests/service-worker.test.mjs
 
 Platform documentation: https://web.dev/learn/pwa/installation/ and
 https://webkit.org/blog/13878/
+
+## Mobile touch and directory entry
+
+Native text selection, image dragging and long-press callouts are disabled for
+the game app, including labels below the floating controls. Native stage-picker
+interaction remains enabled. A selection that iOS creates anyway is cleared.
+
+The build generates `dist/index.html` from `web/index.htm`; there is only one
+editable entry source. `/raccoon/` and `/raccoon/index.htm` carry identical
+manifest/name/icon metadata, and directory navigation canonicalizes to
+`index.htm` before installation. The manifest app ID remains unchanged. The
+Apple touch icon and favicon use a cache-refresh query parameter. Existing
+incorrectly created iOS shortcuts should be removed and added again after
+updating to this release; a page cannot rewrite an already-created OS shortcut.

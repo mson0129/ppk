@@ -28,7 +28,9 @@ check('offline navigation, query URLs and WASM return cached original bytes with
  const h=harness();await h.dispatch('install');h.state.offline=true;const count=h.state.network;
  assert.equal(await (await h.get('index.htm?launch=pwa')).text(),files.get('index.htm').toString());
  assert.deepEqual(new Uint8Array(await (await h.get('port/ppk.wasm',{mode:'cors'})).arrayBuffer()),new Uint8Array(files.get('port/ppk.wasm')));
- assert.equal(await (await h.get('./')).text(),files.get('index.htm').toString());assert.equal(h.state.network,count);
+ assert.equal(await (await h.get('./')).text(),files.get('index.htm').toString());
+ assert.equal(await (await h.get('index.html')).text(),files.get('index.htm').toString());
+ assert.deepEqual(new Uint8Array(await (await h.get('icons/apple-touch-icon.png?v=2',{mode:'cors'})).arrayBuffer()),new Uint8Array(files.get('icons/apple-touch-icon.png')));assert.equal(h.state.network,count);
 });
 check('other pages and non-GET requests are not intercepted',async()=>{
  const h=harness();assert.equal(await h.get('dos.htm'),undefined);assert.equal(await h.get('../index.htm'),undefined);assert.equal(await h.get('index.htm',{method:'POST'}),undefined);

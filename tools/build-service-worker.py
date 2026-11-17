@@ -3,7 +3,7 @@ from pathlib import Path
 import hashlib, json
 root=Path(__file__).resolve().parents[1]
 dist=root/'dist'
-names=['index.htm','pwa.js','app.webmanifest']
+names=['index.htm','index.html','pwa.js','app.webmanifest']
 names += [p.relative_to(dist).as_posix() for p in sorted((dist/'port').iterdir()) if p.suffix in {'.js','.mjs','.wasm'}]
 names += [p.relative_to(dist).as_posix() for p in sorted((dist/'icons').glob('*.png'))]
 assert 'port/ppk.wasm' in names

@@ -234,6 +234,19 @@ window.addEventListener('keydown', event => {
 window.addEventListener('keyup', event => {
     if (game && keyMap[event.code] !== undefined) { event.preventDefault(); keyboardKeys.delete(keyMap[event.code]); syncKeys(); }
 });
+// Prevent native selection/callout from stealing a long-held touch gesture.
+const appRoot = document.querySelector('main');
+document.addEventListener('selectstart', event => {
+    if (appRoot.contains(event.target)) event.preventDefault();
+});
+document.addEventListener('selectionchange', () => {
+    const selection = window.getSelection();
+    if (selection?.rangeCount && appRoot.contains(selection.anchorNode)) selection.removeAllRanges();
+});
+appRoot.addEventListener('contextmenu', event => {
+    if (!event.target.closest('select,option')) event.preventDefault();
+});
+appRoot.addEventListener('dragstart', event => event.preventDefault());
 window.addEventListener('blur', () => { releaseInputs(); gamepadNeedsNeutral = true; });
 document.addEventListener('visibilitychange', () => { if (running && document.hidden && !paused) setPaused(true); });
 const controller = document.querySelector('.touch');

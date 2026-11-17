@@ -17,8 +17,8 @@
   "speedrun_start": "Title-screen Space input event",
   "speedrun_finish": "Stage 50 final candy collected",
   "speedrun_clock": "Real elapsed time including pause, death, continues and stage waits",
-  "pwa_metadata_tests_passed": 3,
+  "pwa_metadata_tests_passed": 4,
   "service_worker_tests_passed": 7,
   "offline_browser_reload_and_wasm_play_verified": true,
-  "offline_cached_files": 11
+  "offline_cached_files": 12
 }

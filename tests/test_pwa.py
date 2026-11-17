@@ -17,3 +17,16 @@ class PwaTests(unittest.TestCase):
   for file in (ROOT/'dist/port').glob('*.mjs'):self.assertIn('port/'+file.name,names)
  def test_html_links_install_metadata(self):
   html=(ROOT/'dist/index.htm').read_text();self.assertIn('rel="manifest"',html);self.assertIn('rel="apple-touch-icon"',html);self.assertIn('src="./pwa.js"',html)
+
+ def test_directory_entry_preserves_install_identity_and_icons(self):
+  from urllib.parse import urljoin
+  html=(ROOT/'dist/index.htm').read_bytes()
+  self.assertEqual(html,(ROOT/'dist/index.html').read_bytes())
+  text=html.decode()
+  self.assertIn('rel="canonical" href="./index.htm"',text)
+  self.assertIn("location.pathname.endsWith('/')",text)
+  self.assertIn('apple-touch-icon.png?v=2',text)
+  manifest=json.loads((ROOT/'dist/app.webmanifest').read_text())
+  self.assertEqual(manifest['id'],'./index.htm')
+  for relative in ['./app.webmanifest','./icons/apple-touch-icon.png?v=2',manifest['start_url']]:
+   self.assertEqual(urljoin('https://mson0129.github.io/raccoon/',relative),urljoin('https://mson0129.github.io/raccoon/index.htm',relative))
