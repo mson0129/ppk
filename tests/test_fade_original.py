@@ -46,13 +46,13 @@ class FadeTests(unittest.TestCase):
   self.assertEqual((out_count,len(out),in_count,len(inside)),(64,64,65,65))
   self.call('key',57,1);self.ticks(1);self.assertEqual(self.call('get_phase'),5)
   tick=0
-  for frame in range(130):
+  for frame in range(66):
    t=frame*DEN//NUM;fraction=math.ceil((frame*DEN-t*NUM)*1000/NUM)
    self.ticks(t-tick);tick=t
    digest=self.call('replay_hash');self.call('render_interpolated',fraction)
    self.assertEqual(self.call('transition_frame',fraction),frame)
    self.assertEqual(self.call('replay_hash'),digest)
-   expected=title if frame==0 else self.expected(title,tc,out[frame-1]) if frame<=64 else self.expected(stage,sc,inside[frame-65])
+   expected=bytes([0,0,0,255])*64000 if frame==0 else self.expected(stage,sc,inside[frame-1])
    self.assertEqual(self.pixels(),expected,f'original palette mismatch at retrace {frame}')
    self.assertEqual((self.state(0x561),self.state(0x563)),(248,168))
   self.finish_fade();self.assertEqual(self.call('get_phase'),0)
@@ -67,3 +67,15 @@ class FadeTests(unittest.TestCase):
   self.assertEqual(self.call('get_stage'),2)
   self.ticks(16);self.assertEqual(self.call('get_phase'),5)
   self.ticks(1);self.assertEqual(self.call('get_phase'),0)
+
+ def test_clear_fade_matches_original_outgoing_palettes(self):
+  self.put(0x13fa,0);self.ticks(1)
+  self.call('render_interpolated',0);source=self.pixels();colors,palette=self.palette(source)
+  retraces,frames=original(0x2e6,palette);self.assertEqual(retraces,64)
+  tick=0
+  for frame in range(64):
+   t=frame*DEN//NUM;fraction=math.ceil((frame*DEN-t*NUM)*1000/NUM)
+   self.ticks(t-tick);tick=t
+   self.call('render_interpolated',fraction)
+   expected=source if frame==0 else self.expected(source,colors,frames[frame-1])
+   self.assertEqual(self.pixels(),expected)

@@ -166,8 +166,8 @@ static int fade_frames(int fraction){
  return (int)((fade_clock+VIDEO_TICK*(unsigned)fraction/1000)/VIDEO_DEN);
 }
 static void present_transition(int fraction){
- int f=fade_frames(fraction);if(fade_kind==FADE_CLEAR&&f>=64){present();return;}int out=fade_kind==FADE_CLEAR||(fade_kind==FADE_TITLE&&f<=64);
- int amount=out?f:fade_kind==FADE_TITLE?f-65:f-1;
+ int f=fade_frames(fraction);if(fade_kind==FADE_CLEAR&&f>=64){present();return;}int out=fade_kind==FADE_CLEAR;
+ int amount=out?f:f-1;
  if(amount<0)amount=0;if(amount>64)amount=64;
  const uint32_t*source=out?fade_colors:colors;uint32_t palette[16];
  for(int i=0;i<16;i++){uint32_t color=0xff000000u;
@@ -190,13 +190,13 @@ API void tick(void){
  if(error_code)return; capture_positions(); native_ticks++;
  if(song_index<song_count){int note=song[song_index++];set(0x1598,song_index);int divisor=state(0x3c6 + note*2);tone_hz=divisor?1193182/divisor:0;set(0x158a,1);}else{tone_hz=0;set(0x158a,0);}
  if(phase==FADING){
-  fade_clock+=VIDEO_TICK;int frames=fade_frames(0),total=fade_kind==FADE_TITLE?129:fade_kind==FADE_STAGE_IN?65:64;
+  fade_clock+=VIDEO_TICK;int frames=fade_frames(0),total=fade_kind==FADE_CLEAR?64:65;
   if(frames>=total){int kind=fade_kind;fade_kind=FADE_NONE;fade_clock=0;
    if(kind==FADE_CLEAR){phase=STAGE_CLEAR;advance_ready=0;present();}else{phase=PLAYING;release_keys();capture_positions();present();}
   }else present_transition(0);
   return;
  }
- if(phase==INTRO){if(rd8(DATA+0x10e7)){int stage=state(0x13f4);memcpy(fade_screen,screen,sizeof screen);memcpy(fade_colors,colors,sizeof colors);
+ if(phase==INTRO){if(rd8(DATA+0x10e7)){int stage=state(0x13f4);/* Original title exit writes black immediately; only the stage fades in. */
  start_stage(stage);title_space_release=1;begin_fade(FADE_TITLE);present_transition(0);return;}intro_previous_x=intro_x;intro_x+=intro_direction;if(intro_x>=213||intro_x<=184)intro_direction=-intro_direction;copy_background(BG>>4);draw_sprite(intro_x,119,0x7920+0x1800,16,1);draw_sprite(intro_x+30,113,0x7920+0x1800,16,1);present();return;}
  if(phase==STAGE_CLEAR||phase==CONTINUE_SCREEN){
   int pressed=rd8(DATA+0x10e7)||rd8(DATA+0x10ca);

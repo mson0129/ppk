@@ -337,13 +337,12 @@ stage fades in. Last-candy RTA completion is latched before either effect.
 
 The supplied executable's title exit calls the immediate-black palette writer
 `0327:019b` before the stage fade-in; it does not call the gradual fade-out there.
-Per the requested title fade-out/fade-in effect, the port reuses the same original
-64-retrace fade-out ladder on the title, followed by the original 65-retrace
-fade-in. Thus the title's requested gradual outgoing effect is an intentional
-change from this binary, rather than a claim that its title call sequence matches.
+The port follows that title sequence: Space immediately switches to black,
+then the stage uses the original 65-retrace fade-in. There is no outgoing
+title fade. The 64-retrace outgoing fade remains on stage clears.
 
 `tests/test_fade_original.py` executes the two original routines in Unicorn and
-compares every pixel at 130 retrace positions against WASM, as well as confirming
+compares every pixel across title fade-in and stage-clear fade-out retrace positions against WASM, as well as confirming
 64/65 original retrace waits and frozen actor positions. The module still ships
 without any CPU emulator. A browser running below 70 Hz may skip visual samples;
 the elapsed time and selected palette step do not slow down with display FPS.
