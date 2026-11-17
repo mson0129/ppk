@@ -296,7 +296,7 @@ across the title boundary does not jump on stage entry. Movement is available
 immediately and a new Space press jumps normally.
 
 Validation: two new WASM regression tests check held-title Space and movement;
-eight replay tests reproduce tick states, pauses, stage-27 practice, 2x/4x
+ten replay tests reproduce tick states, pauses, stage-27 practice, 2x/4x
 speed, exact final millisecond time, sub-tick Space edges, invalid imports,
 state mismatches and recording limits. Browser QA verifies file export/import,
 IndexedDB restoration, 4x completion, frozen viewer time on pause and mobile
@@ -305,3 +305,19 @@ offline playback using the verified service-worker package.
 ```sh
 node --test tests/*.test.mjs
 ```
+
+## Autosave timing regression
+
+`requestAnimationFrame` supplies the frame-start timestamp. The live autosave
+previously reused it after WASM ticking, hashing and rendering, even though the
+latest recorded tick already had a later `performance.now()` timestamp. Replay
+validation could then reject the inconsistent duration/RTA pair. The uncaught
+exception prevented scheduling the next animation frame and froze gameplay.
+
+Periodic autosave now samples a fresh clock value after the tick and uses it
+for both duration and RTA. Snapshot/storage exceptions are isolated from the
+animation loop; recording is disabled for that attempt, the previous replay
+is retained, and gameplay continues. A replay-dialog note reports this case.
+Tick recording is also guarded. The WASM binary and replay format are unchanged.
+Regression tests reproduce a 5000ms RAF timestamp followed by a 5004ms tick,
+verify a consistent fresh snapshot, and inject snapshot/storage failures.

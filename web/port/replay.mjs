@@ -91,6 +91,18 @@ export class ReplayPlayback {
     elapsed(){if(this.done)return this.data.timer.elapsed;return Math.max(0,Math.min(this.visibleWall,this.data.timer.finish??this.data.duration)-this.data.timer.start);}
     fraction(stepMs){return this.done?1000:Math.min(1000,Math.max(0,(this.visibleWall-(this.data.times[this.frame-1]??0))/stepMs*1000));}
 }
+// Autosaving is auxiliary: failures must never escape into the animation loop.
+export class ReplayArchive {
+    constructor({clock,elapsed,save,onError}) {this.clock=clock;this.elapsed=elapsed;this.save=save;this.onError=onError;}
+    capture(recorder,now=this.clock()) {
+        if(!recorder)return null;
+        try {
+            const data=recorder.snapshot(now,this.elapsed(now));
+            if(data)this.save(data);
+            return data;
+        } catch(error) {this.onError(error);return null;}
+    }
+}
 export class ReplayStore {
     async database(){
         if(this.db)return this.db;

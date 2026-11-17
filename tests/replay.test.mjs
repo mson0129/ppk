@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-import {ReplayRecorder,ReplayPlayback,validateReplay,applyReplayMask,MAX_FRAMES} from '../web/port/replay.mjs';
+import {ReplayRecorder,ReplayPlayback,ReplayArchive,validateReplay,applyReplayMask,MAX_FRAMES} from '../web/port/replay.mjs';
 const bytes=await readFile(new URL('../dist/port/ppk.wasm',import.meta.url));
 const engine=createHash('sha256').update(bytes).digest('hex');
 const step=1000*65536/1193182;
@@ -73,4 +73,22 @@ test('recording limit produces a valid truncated movie even if completion happen
  rec.finish(500);assert.equal(rec.push(0,500,7),false);
  const data=rec.snapshot(1000,500);assert.equal(data.frames,MAX_FRAMES);assert.equal(data.completed,false);assert.equal(data.timer.finish,null);validateReplay(data,engine);
  const late=new ReplayRecorder(engine,1,0);for(let i=0;i<MAX_FRAMES;i++)late.push(0,0,7);late.start(2);late.push(16,3,7);assert.equal(late.snapshot(3),null);
+});
+
+test('autosave uses a fresh post-tick timestamp rather than the earlier RAF timestamp',()=>{
+ const rec=new ReplayRecorder(engine,1,0);rec.start(0);rec.push(0,5004,123);
+ // This is the pre-fix failure: a 5000ms RAF timestamp with a 5004ms game tick.
+ assert.throws(()=>rec.snapshot(5000,5000));
+ const saved=[],errors=[];
+ const archive=new ReplayArchive({clock:()=>5005,elapsed:now=>now,save:data=>saved.push(data),onError:e=>errors.push(e)});
+ const movie=archive.capture(rec);assert.equal(movie.duration,5005);assert.equal(movie.timer.elapsed,5005);assert.equal(saved.length,1);assert.equal(errors.length,0);
+});
+test('snapshot or synchronous storage failures cannot escape autosaving and stop gameplay',()=>{
+ let errors=0,ticks=0;
+ const archive=new ReplayArchive({clock:()=>5005,elapsed:now=>now,save:()=>{throw Error('storage failure');},onError:()=>{errors++;}});
+ for(const recorder of [{snapshot:()=>{throw Error('snapshot failure');}},{snapshot:()=>({})}]){
+  assert.equal(archive.capture(recorder),null);
+  ticks++; // The caller can finish the frame and schedule the next one.
+ }
+ assert.equal(ticks,2);assert.equal(errors,2);
 });

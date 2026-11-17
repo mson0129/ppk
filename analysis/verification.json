@@ -21,7 +21,7 @@
   "service_worker_tests_passed": 7,
   "offline_browser_reload_and_wasm_play_verified": true,
   "offline_cached_files": 13,
-  "replay_tests_passed": 8,
+  "replay_tests_passed": 10,
   "title_held_space_no_jump_verified": true,
   "replay_browser": {
     "exported_recording_frames": 264,
@@ -30,5 +30,14 @@
     "indexeddb_reload_verified": true,
     "offline_mobile_playback_verified": true,
     "viewer_pause_timer_frozen": true
+  },
+  "replay_autosave_timing_regression_verified": true,
+  "replay_failure_isolated_from_game_loop": true,
+  "autosave_browser_check": {
+    "elapsed_ms": 75965,
+    "render_fps": 60.1,
+    "simulation_ticks_per_sample": 19,
+    "console_errors": 0,
+    "movement_and_latest_movie_save_verified": true
   }
 }

@@ -1,6 +1,6 @@
 import { SpeedrunTimer } from './speedrun-timer.mjs';
 import { GamepadInput } from './gamepad-input.mjs';
-import { REPLAY_SCANS, MAX_FILE_BYTES, ReplayRecorder, ReplayPlayback, ReplayStore, validateReplay, applyReplayMask } from './replay.mjs';
+import { REPLAY_SCANS, MAX_FILE_BYTES, ReplayRecorder, ReplayPlayback, ReplayArchive, ReplayStore, validateReplay, applyReplayMask } from './replay.mjs';
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
 const status = document.getElementById('status');
@@ -32,7 +32,8 @@ const replayControls = document.getElementById('replay-controls');
 const replayRate = document.getElementById('replay-rate');
 const replayStore = new ReplayStore();
 let recorder = null, playback = null, lastReplay = null, engineId = '', inputMask = 0, spaceReleasedSinceTick = false;
-let replayMenuResume = false, savedAt = 0, replayStorageFailed = false;
+let replayMenuResume = false, savedAt = 0, replayStorageFailed = false, replayRecordError = false;
+const replayArchive = new ReplayArchive({clock:()=>performance.now(),elapsed:now=>Math.floor(speedrun.elapsed(now)),save:storeReplay,onError:stopReplayRecording});
 const inputIcons = {
     keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M5 9h1m3 0h1m3 0h1m3 0h1M5 12h1m3 0h1m3 0h1m3 0h1M7 16h10"/>',
     gamepad: '<path d="M7 7h10c3 0 5 10 3 12-1 1-3-1-5-3H9c-2 2-4 4-5 3-2-2 0-12 3-12Z"/><path d="M8 9v6M5 12h6M16 11h.01M19 14h.01"/>'
@@ -166,7 +167,7 @@ function begin() {
     releaseInputs(); gamepadNeedsNeutral = true;
     game.start_stage(Number(stageSelect.value) || 1);
     game.show_intro();
-    spaceReleasedSinceTick = false;
+    spaceReleasedSinceTick = false; replayRecordError = false;
     recorder = new ReplayRecorder(engineId, Number(stageSelect.value) || 1, performance.now()); savedAt = performance.now();
     speedrun.reset(Number(stageSelect.value) || 1); timerMode.textContent = speedrun.startStage === 1 ? '타임어택' : '연습 시간'; updateTimer(performance.now(), true); lastAudioEvent = 0; deathSource?.stop(); deathSource = null; running = true; paused = false; accumulator = 0; last = performance.now();
     touchButtons.forEach(button => { button.disabled = false; });
@@ -221,10 +222,13 @@ function frame(now) {
             const tickStart = performance.now(), tickPhase = game.get_phase();
             syncKeys(); const tickMask = inputMask | (spaceReleasedSinceTick ? 64 : 0); spaceReleasedSinceTick = false; game.tick();
             const tickNow = performance.now();
-            if (game.run_finished()) { speedrun.finish(tickNow); recorder?.finish(tickNow); }
+            if (game.run_finished()) speedrun.finish(tickNow);
             if (recorder) {
-                const accepted = recorder.push(tickMask, tickNow, game.replay_hash());
-                if (!accepted || game.run_finished()) { archiveReplay(tickNow); recorder = null; }
+                try {
+                    if (game.run_finished()) recorder.finish(tickNow);
+                    const accepted = recorder.push(tickMask, tickNow, game.replay_hash());
+                    if (!accepted || game.run_finished()) { archiveReplay(tickNow); recorder = null; }
+                } catch(error) { stopReplayRecording(error); }
             }
             if (tickPhase === 2 && game.get_phase() === 3) {
                 archiveReplay(tickNow); recorder = new ReplayRecorder(engineId, 1, tickNow);
@@ -250,7 +254,9 @@ function frame(now) {
         if (stageSelect.value !== String(game.get_stage())) stageSelect.value = String(game.get_stage());
         if (beforePhase !== game.get_phase()) updateTimer(performance.now(), true);
         draw(Math.round(accumulator / stepMs * 1000)); updateSound();
-        if (now - savedAt >= 5000) { archiveReplay(now); savedAt = now; }
+        // RAF's now predates this frame's WASM ticks, hashing and rendering.
+        // Snapshot and RTA must share a fresh post-tick clock value.
+        if (now - savedAt >= 5000) { archiveReplay(); savedAt = performance.now(); }
     }
     updateTimer(performance.now());
     maxFrameMs = Math.max(maxFrameMs, now - last); renderCount++;
@@ -381,7 +387,7 @@ function refreshReplaySummary() {
     replaySummary.textContent = lastReplay
         ? `${new Date(lastReplay.createdAt).toLocaleString()} · ${lastReplay.stage} 스테이지 시작 · ${movieTime(lastReplay.timer.elapsed)}${lastReplay.completed ? ' · 완주' : ' · 중간 기록'}`
         : '아직 저장된 플레이가 없습니다. 타이틀에서 Space를 눌러 플레이하면 자동 기록됩니다.';
-    replayNote.textContent = replayStorageFailed ? '자동 저장 공간을 사용할 수 없습니다. 파일로 저장해 보관하세요.'
+    replayNote.textContent = replayRecordError ? '리플레이 기록 오류로 이번 기록을 중단했습니다. 게임은 계속 진행할 수 있습니다.' : replayStorageFailed ? '자동 저장 공간을 사용할 수 없습니다. 파일로 저장해 보관하세요.'
         : lastReplay && lastReplay.engine !== engineId ? '다른 게임 버전의 기록입니다. 파일 저장은 가능하지만 이 버전에서는 재생할 수 없습니다.' : '';
 }
 function storeReplay(data) {
@@ -389,10 +395,12 @@ function storeReplay(data) {
     lastReplay = data; refreshReplaySummary();
     replayStore.save(data).catch(() => { replayStorageFailed = true; if(replayDialog.open) refreshReplaySummary(); });
 }
-function archiveReplay(now = performance.now()) {
-    const data = recorder?.snapshot(now, Math.floor(speedrun.elapsed(now)));
-    if (data) storeReplay(data);
-    return data;
+function stopReplayRecording(error) {
+    recorder = null; replayRecordError = true;
+    console.warn('Replay recording stopped; gameplay continues.', error);
+}
+function archiveReplay(now) {
+    return replayArchive.capture(recorder, now);
 }
 replayButton.addEventListener('click', () => {
     if (!playback) archiveReplay();
