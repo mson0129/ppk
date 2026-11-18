@@ -7,12 +7,9 @@ shutil.copytree(
     root / 'web', dist, dirs_exist_ok=True,
     ignore=shutil.ignore_patterns('dos.htm', 'README.md', '.DS_Store', '*.jsdos'),
 )
-# Remove leftovers from builds that used to package the DOS reference.
-for name in ('dos.htm', 'ppk.jsdos', 'README.md'):
+# Remove obsolete files from older builds.
+for name in ('dos.htm', 'ppk.jsdos', 'README.md', 'index.htm'):
     (dist / name).unlink(missing_ok=True)
-# GitHub Pages and ordinary HTTP servers use index.html for a directory URL.
-# Generate the alias from the canonical source so install metadata cannot drift.
-shutil.copy2(root/'dist/index.htm', root/'dist/index.html')
 
 if (root/'dist/port/ppk.wasm').is_file():
     import subprocess, sys

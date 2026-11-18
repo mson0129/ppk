@@ -2,9 +2,11 @@ __pycache__/
 *.pyc
 *.dylib
 
-/dist/
+/dist/*.jsdos
+/dist/dos.htm
 .venv/
 .DS_Store
+/target/
 /rust/target/
 # Local DOS source material and generated runtime inputs
 /original/
@@ -15,9 +17,7 @@ __pycache__/
 
 # Local reverse engineering and the historical C reference
 /analysis/
-/src/
 /requirements-analysis.txt
-/rust/src/oracle.rs
 /tests/compare_c_rust.py
 /tests/test_fade_original.py
 /tools/assets.py

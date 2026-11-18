@@ -36,7 +36,7 @@ self.addEventListener('fetch', event => {
     if (event.request.method !== 'GET') return;
     const url = new URL(event.request.url); url.search = ''; url.hash = '';
     let target = url.href;
-    if (event.request.mode === 'navigate' && target === BASE) target = new URL('index.htm', BASE).href;
+    if (event.request.mode === 'navigate' && target === BASE) target = new URL('index.html', BASE).href;
     const asset = byUrl.get(target);
     if (!asset) return; // Other pages and the online-only DOS reference are untouched.
     event.respondWith((async () => {

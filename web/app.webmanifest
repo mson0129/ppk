@@ -1,9 +1,9 @@
 {
-  "id": "./index.htm",
+  "id": "./index.html",
   "name": "돌아온 너구리",
   "short_name": "너구리",
   "lang": "ko",
-  "start_url": "./index.htm",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#16191f",
