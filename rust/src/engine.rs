@@ -14,7 +14,6 @@ use crate::{
 #[repr(u32)]
 pub enum Phase {
     Playing = 0,
-    Dying = 1,
     Continue = 2,
     Title = 3,
     StageClear = 4,
@@ -27,7 +26,6 @@ pub struct Engine {
     pub audio: Audio,
     pub transition: Transition,
     pub phase: Phase,
-    pub wait_ticks: u32,
     pub ticks: u32,
     pub advance_ready: bool,
     pub title_space_release: bool,
@@ -47,7 +45,6 @@ impl Engine {
             audio: Audio::new(),
             transition: Transition::new(),
             phase: Phase::Playing,
-            wait_ticks: 0,
             ticks: 0,
             advance_ready: false,
             title_space_release: false,
@@ -91,7 +88,6 @@ impl Engine {
         self.transition.clock = 0;
         self.advance_ready = false;
         self.title_space_release = false;
-        self.wait_ticks = 0;
         self.ticks = 0;
         self.finished = false;
         self.error = 0;
@@ -214,6 +210,19 @@ impl Engine {
         self.transition.begin(kind);
         self.phase = Phase::Fading;
     }
+    fn restart_after_death(&mut self) {
+        self.game.player.x = 248;
+        self.game.player.y = 168;
+        self.game.lives = self.game.lives.wrapping_sub(1);
+        if self.game.lives < 0 {
+            self.show_continue();
+        } else {
+            self.release_keys();
+            self.load_stage();
+            self.begin_fade(FadeKind::Stage);
+            self.transition.present(&mut self.graphics, 0);
+        }
+    }
     fn prepare_bonus(&mut self) {
         self.phase = Phase::StageClear;
         self.advance_ready = false;
@@ -268,6 +277,8 @@ impl Engine {
                         self.phase = Phase::StageClear;
                         self.advance_ready = false;
                         self.graphics.present();
+                    } else if kind == FadeKind::Death {
+                        self.restart_after_death();
                     } else {
                         self.phase = Phase::Playing;
                         self.release_keys();
@@ -323,22 +334,6 @@ impl Engine {
                 }
                 return;
             }
-            Phase::Dying => {
-                if self.wait_ticks > 0 {
-                    self.wait_ticks -= 1;
-                    return;
-                }
-                self.game.player.x = 248;
-                self.game.player.y = 168;
-                self.game.lives = self.game.lives.wrapping_sub(1);
-                if self.game.lives < 0 {
-                    self.show_continue();
-                    return;
-                }
-                self.load_stage();
-                self.phase = Phase::Playing;
-                return;
-            }
             Phase::Playing => {}
         }
         self.game.move_walkers(false);
@@ -365,9 +360,11 @@ impl Engine {
             self.game.death_pitch = self.game.death_pitch.wrapping_add(10);
         }
         if self.game.player.respawn != 0 {
-            self.phase = Phase::Dying;
-            self.wait_ticks = 12;
+            self.transition.capture(&self.graphics);
+            self.begin_fade(FadeKind::Death);
             self.audio.event = self.audio.event.wrapping_add(1);
+            self.transition.present(&mut self.graphics, 0);
+            return;
         }
         if self.game.remaining_candy == 0 && self.phase == Phase::Playing {
             self.refresh_score();
@@ -404,7 +401,6 @@ impl Engine {
         }
         let extra = [
             self.phase as u32,
-            self.wait_ticks,
             self.ticks,
             self.advance_ready as u32,
             self.title_space_release as u32,

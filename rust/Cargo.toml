@@ -2,8 +2,6 @@
 name = "raccoon-engine"
 version = "0.1.0"
 edition = "2021"
-[features]
-oracle = []
 [lib]
 crate-type = ["cdylib", "rlib"]
 [profile.release]

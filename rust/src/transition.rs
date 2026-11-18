@@ -9,6 +9,7 @@ pub enum FadeKind {
     Title = 1,
     Clear = 2,
     Stage = 3,
+    Death = 4,
 }
 pub struct Transition {
     pub kind: FadeKind,
@@ -35,7 +36,10 @@ impl Transition {
     }
     pub fn advance(&mut self) -> bool {
         self.clock += RETRACES_PER_SIMULATION_TICK;
-        self.frames(0) >= if self.kind == FadeKind::Clear { 64 } else { 65 }
+        self.frames(0) >= if self.is_outgoing() { 64 } else { 65 }
+    }
+    fn is_outgoing(&self) -> bool {
+        matches!(self.kind, FadeKind::Clear | FadeKind::Death)
     }
     pub fn capture(&mut self, g: &Graphics) {
         self.outgoing.copy_from_slice(&g.indexed);
@@ -43,8 +47,8 @@ impl Transition {
     }
     pub fn present(&self, g: &mut Graphics, fraction: i32) {
         let frame = self.frames(fraction);
-        let outgoing = self.kind == FadeKind::Clear;
-        if outgoing && frame >= 64 {
+        let outgoing = self.is_outgoing();
+        if self.kind == FadeKind::Clear && frame >= 64 {
             g.present();
             return;
         }

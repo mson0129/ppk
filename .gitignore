@@ -6,4 +6,26 @@ __pycache__/
 .venv/
 .DS_Store
 /rust/target/
-/analysis/c-reference.wasm
+# Local DOS source material and generated runtime inputs
+/original/
+/assets/
+/rust/assets/
+/dos/
+/web/dos.htm
+/web/README.md
+
+# Local reverse engineering and the historical C reference
+/analysis/
+/src/
+/requirements-analysis.txt
+/rust/src/oracle.rs
+/tests/compare_c_rust.py
+/tests/test_fade_original.py
+/tools/assets.py
+/tools/build-bundle.py
+/tools/build-c-reference.sh
+/tools/build-icons.py
+/tools/compare_original.py
+/tools/disasm.py
+/tools/publish.py
+/tools/translate.py

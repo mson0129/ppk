@@ -129,8 +129,18 @@ class PortTests(unittest.TestCase):
     def test_death_and_respawn(self):
         self.put(0x583, 1)
         self.ticks(1)
-        self.assertEqual(self.call('get_phase'), 1)
-        self.ticks(13)
+        self.assertEqual(self.call('transition_kind'), 4)
+        self.ticks(16)
+        self.assertEqual(self.call('transition_kind'), 4)
+        self.assertEqual(self.state(0x1398), 5)
+        self.call('render_interpolated', 1000)
+        fb = self.call('framebuffer')
+        self.assertEqual(self.memory.read(self.store, fb, fb + 256000),
+                         bytes([0, 0, 0, 255]) * 64000)
+        self.ticks(1)
+        self.assertEqual(self.call('transition_kind'), 3)
+        self.assertEqual(self.memory.read(self.store, fb, fb + 256000),
+                         bytes([0, 0, 0, 255]) * 64000)
         self.finish_fade()
         self.assertEqual(self.call('get_phase'), 0)
         self.assertEqual(self.state(0x1398), 4)
@@ -208,7 +218,8 @@ class PortTests(unittest.TestCase):
         self.assertEqual(self.call('get_stage'), 27)
         self.finish_fade()
         self.put(0x583, 1)
-        self.ticks(14)
+        self.ticks(1)
+        self.finish_fade()
         self.assertEqual(self.call('get_stage'), 27)
         self.assertEqual(self.state(0x1398), 4)
 
@@ -217,7 +228,8 @@ class PortTests(unittest.TestCase):
         self.put(0xcb6, 1234)
         self.put(0x1398, 0)
         self.put(0x583, 1)
-        self.ticks(14)
+        self.ticks(1)
+        self.finish_fade()
         self.assertEqual(self.call('get_phase'), 2)
         self.ticks(1)
         self.call('key', 28, 1)
@@ -277,7 +289,9 @@ class PortTests(unittest.TestCase):
             after = self.memory.read(self.store, self.base, self.base + 0x50000)
             self.assertEqual(before, after)
             self.call('render_interpolated', 1000)
-            self.assertEqual(endpoint, self.memory.read(self.store, fb, fb + 256000))
+            # During a fade the palette advances between simulation ticks.
+            if self.call('get_phase') != 5:
+                self.assertEqual(endpoint, self.memory.read(self.store, fb, fb + 256000))
 
 if __name__ == '__main__':
     unittest.main()

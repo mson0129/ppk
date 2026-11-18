@@ -115,6 +115,3 @@ pub extern "C" fn transition_frame(fraction: i32) -> u32 {
 pub extern "C" fn transition_kind() -> u32 {
     with(|e| e.transition.kind as u32)
 }
-
-#[cfg(feature = "oracle")]
-mod oracle;
