@@ -1,6 +1,8 @@
 # 돌아온 너구리 Rust WASM 포팅
 
-DOS 게임인 돌아온 너구리를 리버스 엔지니어링을 통해 웹 버전으로 포팅한 것입니다.
+[돌아온 너구리 Rust WASM 포팅 버전](https://mson0129.github.io/ppk/)
+
+DOS 게임인 돌아온 너구리를 리버스 엔지니어링을 통해 웹 버전으로 포팅한 것입니다.\
 게임 엔진을 Rust로 재작성하고 WebAssembly(WASM)로 빌드했습니다.
 
 돌아온 너구리의 원 저작자는 아래와 같습니다.
@@ -11,7 +13,7 @@ Copyright (c) 1992 돌쇠 & 황성규
 
 ### 엔진
 
-`src/`는 게임 규칙, 화면 렌더링, 소리와 장면 전환을 담당합니다.
+`src/`는 게임 규칙, 화면 렌더링, 소리와 장면 전환을 담당합니다.\
 `web/`는 브라우저에서 화면을 표시하고 키보드·터치·게임패드 입력,
 타임어택, 리플레이, 오프라인 실행을 처리합니다.
 
@@ -81,8 +83,6 @@ rustup target add wasm32-unknown-unknown
 .\build.ps1
 ```
 
-스크립트는 Python 런처 `py`가 있으면 `py -3`를 사용하고, 없으면 `python`을 사용합니다.
-
 ### macOS 또는 Linux
 
 저장소 루트에서 실행합니다.
@@ -100,6 +100,9 @@ rustup target add wasm32-unknown-unknown
 - Windows PowerShell은 `py -3 -m http.server 8081 --bind 127.0.0.1 --directory dist`를 실행합니다. `py`가 없다면 `python -m http.server 8081 --bind 127.0.0.1 --directory dist`를 사용합니다.
 - macOS 또는 Linux는 `python3 -m http.server 8081 --bind 127.0.0.1 --directory dist`를 실행합니다.
 
-브라우저에서 [http://127.0.0.1:8081/](http://127.0.0.1:8081/)을 엽니다.
-방향키로 이동하거나 사다리를 타고, Space로 시작하거나 점프합니다. P는 일시정지입니다.
+> [!NOTE]
+> 스크립트는 Python 런처 `py`가 있으면 `py -3`를 사용하고, 없으면 `python` 또는 `python3`을 사용합니다.
+
+브라우저에서 [http://127.0.0.1:8081/](http://127.0.0.1:8081/)을 엽니다.\
+방향키로 이동하거나 사다리를 타고, Space로 시작하거나 점프합니다. P는 일시정지입니다.\
 터치와 게임패드도 지원합니다.
