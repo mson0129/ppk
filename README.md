@@ -6,12 +6,8 @@
 ## 로컬 빌드
 
 Python 3과 Rust의 `wasm32-unknown-unknown` 타깃이 필요합니다.
-빌드 전에 다음 두 파일을 로컬에 준비하세요. Git은 이 파일들을 추적하지 않습니다.
-
-| 경로 | 내용 |
-| --- | --- |
-| `original/ppk.zip` | 기존 DOS 자료 아카이브. 게임 데이터는 아카이브 내부의 `ppk/` 아래에 있습니다. |
-| `assets/initial-data.bin` | 포트가 사용하는 초기 게임 데이터 사본. 기존 개발 폴더에서 백업해 둔 파일을 사용합니다. |
+빌드에 필요한 게임 데이터 7개는 `assets/`에 포함되어 있습니다.
+저장소를 받은 뒤 바로 빌드할 수 있습니다.
 
 ```sh
 rustup target add wasm32-unknown-unknown
@@ -19,10 +15,9 @@ rustup target add wasm32-unknown-unknown
 python3 -m http.server 8081 --bind 127.0.0.1 --directory dist
 ```
 
-브라우저에서 `http://127.0.0.1:8081/`을 엽니다. 빌드는 WASM에 필요한
-데이터만 추출해 `rust/assets/`에 놓고, 실행에 필요한 웹 파일을
-`dist/`에 생성합니다. 원본 DOS 실행 파일, DOS 번들, 분석 자료는
-`dist/`에 들어가지 않습니다.
+브라우저에서 `http://127.0.0.1:8081/`을 엽니다. 빌드는 `assets/`의 데이터를 WASM에
+포함하고, 실행에 필요한 웹 파일을 `dist/`에 생성합니다. 원본 DOS 실행 파일,
+ZIP 아카이브, 분석 자료는 빌드에 필요하지 않습니다.
 
 ## 실행과 검증
 
@@ -41,7 +36,7 @@ python3 -m unittest discover -s tests -p test_pwa.py
 
 ## GitHub Pages 준비
 
-나중에 이 저장소에서 Pages를 배포할 때는 위 로컬 입력으로 빌드한 뒤
+나중에 이 저장소에서 Pages를 배포할 때는 빌드한 뒤
 `dist/`를 정적 사이트 산출물로 사용합니다. 프로젝트 사이트 경로는
 `https://mson0129.github.io/ppk/`이며, 매니페스트와 서비스 워커는
 문서 위치에 상대적인 경로를 사용합니다. HTTPS에서 앱을 한 번 열고

@@ -1,7 +1,6 @@
 """Exercise the shipped WASM itself. Run: python -m unittest discover -s tests -v"""
 import struct
 import unittest
-from zipfile import ZipFile
 from pathlib import Path
 import wasmtime
 ROOT = Path(__file__).resolve().parents[1]
@@ -172,8 +171,7 @@ class PortTests(unittest.TestCase):
 
     def test_all_fifty_stage_maps_and_rendering(self):
         self.assertEqual(self.call('stage_count'), 50)
-        with ZipFile(ROOT / 'original/ppk.zip') as archive:
-            maps = archive.read('ppk/STAGE.PPK')
+        maps = (ROOT / 'assets/STAGE.PPK').read_bytes()
         for stage in range(1, 51):
             with self.subTest(stage=stage):
                 self.call('start_stage', stage)

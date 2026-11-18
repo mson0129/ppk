@@ -8,7 +8,6 @@ __pycache__/
 /rust/target/
 # Local DOS source material and generated runtime inputs
 /original/
-/assets/
 /rust/assets/
 /dos/
 /web/dos.htm
