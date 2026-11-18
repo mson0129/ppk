@@ -1,34 +1,45 @@
-# PPK 50-stage WebAssembly source port
+# PPK 50-stage Rust WebAssembly port
 
-This is an ahead-of-time static recompilation of the original game's routines,
-with native browser platform replacements. It does **not** execute PPK.EXE,
-DOSBox, EmulatorJS, js-dos, an x86 instruction decoder, or a VGA device at runtime.
-The shipped `ppk.wasm` has **zero imports**. JavaScript only supplies input,
-Web Audio playback, a fixed clock, and Canvas presentation.
+The browser game is now built from human-maintained Rust, organized around named
+player/enemy/stage state and ordinary functions. It does **not** compile or link
+C, execute PPK.EXE, or include DOSBox, x86 instruction decoding, virtual registers,
+CPU flags, or a VGA emulator. The WASM module has **zero imports**. JavaScript
+continues to supply input, Web Audio, the fixed clock, Canvas and replay storage.
 
-This repository contains the original files, C source, web source, tests and
-analysis outputs. The website checkout contains only the deployable runtime.
+The previous statically recompiled C engine remains in `src/` as an independent
+oracle. It is not part of the default build. Both engines are compared with the
+original executable offline; that validation machinery never ships to browsers.
 
-- `original/`: original `PPK.EXE`, game/map files and `ppk.zip` archive.
-- `src/`, `assets/`: WASM C sources, generated headers and initialized data.
-- `tools/`, `tests/`, `analysis/`: build/analysis tools, tests and recovered data.
-- `web/`: canonical browser HTML, JavaScript and time-attack timer source.
-- `dos/`: DOSBox configuration for the optional original DOS reference.
-- `dist/`: complete static website build, including `port/ppk.wasm`.
+- `rust/src/`: readable Rust gameplay, lifecycle, renderer, audio and palette fades.
+- `rust/assets/`: original data assets embedded with `include_bytes!`.
+- `src/`: frozen C reference implementation and generated C headers.
+- `original/`, `analysis/`: supplied DOS distribution, disassembly and verification results.
+- `tools/`, `tests/`: reproducible builds and independent differential tests.
+- `web/`: canonical browser UI, replay and time-attack source.
+- `dist/`: runtime-only static website, including Rust-built `port/ppk.wasm`.
+
+Start reading with [rust/README.md](rust/README.md), then
+[rust/src/state.rs](rust/src/state.rs), [rust/src/player.rs](rust/src/player.rs)
+and [rust/src/engine.rs](rust/src/engine.rs).
 
 The EXE is the supplied original binary. This project builds the WASM port;
 it does not claim to rebuild the original DOS executable from C.
 
 ## Build
 
-Install the official [WASI SDK](https://github.com/WebAssembly/wasi-sdk/releases).
-The WASM output was built with wasi-sdk 30.0 (macOS arm64).
-From the repository root:
+Install Rust and its WebAssembly standard library (no Cargo dependencies are needed).
+The verified compiler is rustc 1.99.1. From the repository root:
 
 ```sh
-WASI_SDK_PATH=/path/to/wasi-sdk ./build.sh
+rustup target add wasm32-unknown-unknown
+./build.sh
 python3 -m http.server 8081 --bind 127.0.0.1 --directory dist
 ```
+
+The default build uses Cargo with the committed lockfile. No WASI SDK or C compiler
+is needed for it. For an optional independent C reference build, use the official
+WASI SDK with `WASI_SDK_PATH=/path/to/wasi-sdk sh tools/build-c-reference.sh`.
+That writes `analysis/c-reference.wasm`, leaving the Rust web build untouched.
 
 Open `http://127.0.0.1:8081/index.htm`. Static hosting, including GitHub
 Pages, needs no extra headers, npm dependencies, CDN, or server-side runtime.
@@ -91,7 +102,7 @@ This changes local files only; it does not commit, push or publish to a host.
   exactly matches the original `0327:2477` loader.
 - `STAGE.PP2`: original continue screen, now decoded for same-stage credit continues.
 
-`tools/translate.py` traverses the control-flow graph of reachable game functions
+For the retained C reference, `tools/translate.py` traverses the control-flow graph of reachable game functions
 and emits direct C calls, branches, arithmetic, and memory accesses. Original
 16-bit values and arithmetic flags are preserved to retain edge behavior.
 There is no runtime opcode dispatch. `src/game.generated.c` holds 16 routines
@@ -169,8 +180,8 @@ node --test tests/speedrun-timer.test.mjs
 
 ## Re-run static translation
 
-Normal builds use the checked-in generated C and need no emulator/Capstone.
-To regenerate after analysis:
+Normal builds use the checked-in Rust source and need no emulator/Capstone.
+Only to regenerate the historical C reference after analysis:
 
 ```sh
 /tmp/ppk-tools/bin/python tools/translate.py
@@ -346,3 +357,35 @@ compares every pixel across title fade-in and stage-clear fade-out retrace posit
 64/65 original retrace waits and frozen actor positions. The module still ships
 without any CPU emulator. A browser running below 70 Hz may skip visual samples;
 the elapsed time and selected palette step do not slow down with display FPS.
+
+## Rust rewrite validation
+
+`tests/compare_c_rust.py` compares all 0x1784 bytes of the game-data image, all
+32,000 planar background bytes, all 64,000 RGBA pixels, phase/stage, completion,
+audio and frame counter on 24,500 ticks across 50 stages. It includes randomized
+input, title/respawn/continue transitions, forced clears, next stages and wrapping.
+Results and exact module hashes are saved in `analysis/rust-verification.json`.
+
+```sh
+WASI_SDK_PATH=/path/to/wasi-sdk sh tools/build-c-reference.sh
+python tests/compare_c_rust.py
+```
+
+The original executable oracle also supports Rust directly. Build the isolated
+test adapter (excluded from production), then run the same 32,000-routine suite:
+
+```sh
+(cd rust && CARGO_TARGET_DIR=target/oracle cargo build --locked --release \
+  --target wasm32-unknown-unknown --features oracle)
+python tools/compare_original.py --wasm \
+  rust/target/oracle/wasm32-unknown-unknown/release/raccoon_engine.wasm
+```
+
+The existing Python WASM/palette/PWA and JavaScript replay/controller/timer/cache
+tests run against the production Rust module: 25 Python and 28 JavaScript tests.
+The Rust rewrite does not claim proof for every possible input; these tests use
+exact equality for the exercised paths, including the documented original quirks.
+
+Browser ABI names and controls remain compatible. Replay files identify their
+engine by the full WASM SHA-256, so recordings made with the old C module remain
+version-incompatible with this Rust module; new recordings replay deterministically.

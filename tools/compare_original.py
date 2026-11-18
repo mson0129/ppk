@@ -8,9 +8,21 @@ from unicorn import *
 from unicorn.x86_const import *
 from zipfile import ZipFile
 root=Path(__file__).resolve().parents[1]
-lib=ctypes.CDLL(sys.argv[1] if len(sys.argv)>1 else '/private/tmp/ppk-port.dylib')
-lib.test_memory.restype=ctypes.c_void_p
-lib.init();ptr=lib.test_memory(); DATA=0xf0a0
+if '--wasm' in sys.argv:
+ import wasmtime
+ module_path=Path(sys.argv[sys.argv.index('--wasm')+1])
+ store=wasmtime.Store();module=wasmtime.Module.from_file(store.engine,str(module_path))
+ exports=wasmtime.Instance(store,module,[]).exports(store)
+ class WasmLibrary:
+  def __getattr__(self,name):return lambda *args:exports[name](store,*args)
+ lib=WasmLibrary();lib.init()
+ # The test module fixes its memory size, so the host view cannot be invalidated.
+ ptr=ctypes.addressof(exports['memory'].data_ptr(store).contents)+exports['data_pointer'](store)
+else:
+ lib=ctypes.CDLL(sys.argv[1] if len(sys.argv)>1 else '/private/tmp/ppk-port.dylib')
+ lib.test_memory.restype=ctypes.c_void_p
+ lib.init();ptr=lib.test_memory()
+DATA=0xf0a0
 raw=(root/'analysis/PPK-unpacked.EXE').read_bytes();image=raw[struct.unpack_from('<H',raw,8)[0]*16:]
 u=Uc(UC_ARCH_X86,UC_MODE_16);u.mem_map(0,0x60000)
 # External graphics functions affect no gameplay state and are native platform calls.

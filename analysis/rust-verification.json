@@ -1,0 +1,13 @@
+{
+  "c_sha256": "02d5f3cd5f2302ce9ff89d0b6d1b637ceb3cc7547d73a837757aa4c109af2756",
+  "rust_sha256": "6f0259282174032b4b0bac09a7f80e94106a2c147d552f4a08a1654e19aa7118",
+  "stages": 50,
+  "tick_comparisons": 24500,
+  "compared": [
+    "complete 0x1784-byte legacy data image",
+    "32000 background-plane bytes",
+    "all 64000 RGBA pixels",
+    "phase, stage, RTA completion, sound and tick counter"
+  ],
+  "seconds": 27.218
+}
